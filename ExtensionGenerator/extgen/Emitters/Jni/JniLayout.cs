@@ -12,6 +12,8 @@ namespace extgen.Emitters.Jni
             JavaBaseDir = Path.GetFullPath(opts.OutputJavaFolder, root);
             NativeBaseDir = Path.GetFullPath(opts.OutputNativeFolder, root);
 
+            if (Directory.Exists(NativeBaseDir)) Directory.Delete(NativeBaseDir, true);
+
             Directory.CreateDirectory(JavaBaseDir);
             Directory.CreateDirectory(NativeBaseDir);
         }
