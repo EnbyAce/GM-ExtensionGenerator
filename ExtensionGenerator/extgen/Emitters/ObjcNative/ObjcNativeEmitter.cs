@@ -95,7 +95,7 @@ namespace extgen.Emitters.ObjcNative
             var platform = ctx.Options.Platform;
 
             w.Import($"{ext}Internal_{platform}.h")
-             .Import($"{ext}Internal.h")
+             .Import($"native/{ext}Internal_native.h")
              .Line();
 
             var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
@@ -139,8 +139,6 @@ namespace extgen.Emitters.ObjcNative
                         w.Return(expr => expr.Call(exportName, bufferParam, bufferLengthParam));
                     });
                 }
-
-
             });
         }
     }
