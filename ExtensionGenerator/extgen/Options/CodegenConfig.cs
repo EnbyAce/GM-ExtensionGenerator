@@ -35,8 +35,8 @@ namespace extgen.Options
         [JsonPropertyName("ios_swift")] public IosEmitterOptions? IosSwift { get; set; }
         [JsonPropertyName("tvos_swift")] public TvosEmitterOptions? TvosSwift { get; set; }
 
-        [JsonPropertyName("ios_bridge")] public IosEmitterOptions? IosNative { get; set; }
-        [JsonPropertyName("tvos_bridge")] public TvosEmitterOptions? TvosNative { get; set; }
+        [JsonPropertyName("ios_native")] public IosEmitterOptions? IosNative { get; set; }
+        [JsonPropertyName("tvos_native")] public TvosEmitterOptions? TvosNative { get; set; }
 
 
         [JsonPropertyName("docs")] public DocEmitterOptions? Docs { get; set; }
