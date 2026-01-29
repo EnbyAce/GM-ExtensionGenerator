@@ -81,12 +81,12 @@ namespace extgen.Emitters.Doc
             {
                 w.JsDoc(spec =>
                 {
-                    spec.Tag("enum_partial", e.Name);
+                    spec.Tag("const_partial", e.Name);
                     foreach (var m in e.Members)
                     {
                         spec.Member(new(m.Name, JsDocType(e.Underlying)));
                     }
-                    spec.Tag("enum_end");
+                    spec.Tag("const_end");
                 });
                 w.Line();
             }
