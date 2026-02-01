@@ -1,4 +1,5 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
+using extgen.Model;
 using gmidlreader;
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
@@ -16,141 +17,206 @@ namespace extgen.Parsing.Gmidl
         private static readonly Regex _matchCollection = MatchCollection();
         private static readonly Regex _matchOptional = MatchOptional();
 
-        private static ImmutableArray<IrEnum> _enums = [];
-        private static ImmutableArray<IrStruct> _structs = [];
-        private static ImmutableArray<IrConstant> _constants = [];
-        private static ImmutableArray<IrFunction> _functions = [];
+        // Instance state (no statics; safer and deterministic)
+        private ImmutableArray<IrEnum> _enums = [];
+        private ImmutableArray<IrStruct> _structs = [];
+        private ImmutableArray<IrConstant> _constants = [];
+        private ImmutableArray<IrFunction> _functions = [];
 
         private Dictionary<string, IrSymbolKind> _typeSymbols = new(StringComparer.Ordinal);
 
+        // Hint → primitive mapping (kept from your original idea)
+        private readonly Dictionary<string, GMIDLPrimitive> _hintToPrimitive = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["double"] = GMIDLPrimitive.Double,
+            ["real"] = GMIDLPrimitive.Double,
+            ["float"] = GMIDLPrimitive.Float,
+
+            ["int"] = GMIDLPrimitive.Int32,
+            ["int32"] = GMIDLPrimitive.Int32,
+            ["uint"] = GMIDLPrimitive.UInt32,
+            ["uint32"] = GMIDLPrimitive.UInt32,
+
+            ["int64"] = GMIDLPrimitive.Int64,
+
+            ["bool"] = GMIDLPrimitive.Bool,
+            ["string"] = GMIDLPrimitive.String,
+            ["cstring"] = GMIDLPrimitive.CString,
+
+            ["object"] = GMIDLPrimitive.Object,
+            ["array"] = GMIDLPrimitive.Array,
+            ["any"] = GMIDLPrimitive.GMVal,
+
+            ["func"] = GMIDLPrimitive.Function,
+            ["function"] = GMIDLPrimitive.Function,
+
+            // not always present in GMIDLPrimitive depending on your reader,
+            // but kept here as hints:
+            ["buffer"] = GMIDLPrimitive.Pointer, // we'll special-case to IrType.Buffer
+        };
+
+        private static readonly Dictionary<string, IrType> _hintToIrBuiltin = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // primitives missing from GMIDLPrimitive
+            ["int8"] = IrType.Int8,
+            ["uint8"] = IrType.UInt8,
+            ["int16"] = IrType.Int16,
+            ["uint16"] = IrType.UInt16,
+            ["uint64"] = IrType.UInt64,
+
+            // non-primitive builtins
+            ["buffer"] = IrType.Buffer,
+        };
+
         public IrCompilation Build()
         {
-            if (_db.Modules.Count == 0) return new IrCompilation("", [], [], [], []);
+            if (_db.Modules.Count == 0)
+                return new IrCompilation("", [], [], [], []);
 
             var module = _db.Modules[0];
 
+            // Build symbol table first (so type parsing can resolve Named)
             _typeSymbols = new(StringComparer.Ordinal);
 
             foreach (var e in module.Data.Enums)
                 AddSymbol(e.Name, IrSymbolKind.Enum);
 
             foreach (var c in module.Data.Classes)
-                AddSymbol(c.Name[2..^2], IrSymbolKind.Struct);
+                AddSymbol(StripClassName(c.Name), IrSymbolKind.Struct);
 
             void AddSymbol(string name, IrSymbolKind kind)
             {
                 if (_typeSymbols.TryGetValue(name, out var existing) && existing != kind)
-                    throw new InvalidOperationException($"Type name collision: '{name}' is both {existing} and {kind}.");
+                    throw new InvalidOperationException(
+                        $"Type name collision: '{name}' is both {existing} and {kind}.");
                 _typeSymbols[name] = kind;
             }
 
+            // Parse
             _enums = [.. module.Data.Enums.Select(ParseEnum)];
             _structs = [.. module.Data.Classes.Select(ParseStruct)];
             _constants = [.. module.Data.Constants.Select(ParseConstant)];
             _functions = [.. module.Data.Functions.Select(ParseFunction)];
 
-            return new IrCompilation(module.Name, _enums, TopologicallySortStructs(_structs), _functions, _constants);
+            // Sort structs so deps come first
+            var sortedStructs = TopologicallySortStructs(_structs);
+
+            return new IrCompilation(module.Name, _enums, sortedStructs, _functions, _constants);
         }
 
-        private IrConstant ParseConstant(GMIDLNode<GMIDLConstant> cst) 
+        private static string StripClassName(string gmidlClassName)
         {
-            var primitiveType = cst.Data.Type.PrimitiveOrNull() ?? throw new InvalidOperationException("Constants need to have a defined type");
-            return new IrConstant(cst.Name, ParseType(primitiveType, cst.Attributes), cst.Data.Value ?? "");
+            // Your original: cls.Name[2..^2]
+            // Keep it but guard for short names.
+            if (gmidlClassName.Length >= 4)
+                return gmidlClassName[2..^2];
+            return gmidlClassName;
         }
 
-        private IrEnum ParseEnum(GMIDLNode<GMIDLEnum> enm) 
+        private IrConstant ParseConstant(GMIDLNode<GMIDLConstant> cst)
         {
+            var primitiveType = cst.Data.Type.PrimitiveOrNull()
+                ?? throw new InvalidOperationException("Constants need to have a defined type");
+
+            return new IrConstant(
+                cst.Name,
+                ParseType(primitiveType, cst.Attributes),
+                cst.Data.Value ?? "");
+        }
+
+        private IrEnum ParseEnum(GMIDLNode<GMIDLEnum> enm)
+        {
+            // default type if unspecified
             var primitiveType = enm.Data.DefaultType.PrimitiveOrNull() ?? GMIDLPrimitive.Int32;
-            return new IrEnum(enm.Name, ParseType(primitiveType, enm.Attributes), [.. enm.Data.Elements.Select(ParseEnumMember)]);
+
+            // IMPORTANT:
+            // In the new world, enum fields in IR should be IrType.Named(Enum, name)
+            // The enum definition itself still carries its underlying IrType (used for native codegen).
+            var underlying = ParseType(primitiveType, enm.Attributes);
+
+            return new IrEnum(
+                enm.Name,
+                underlying,
+                [.. enm.Data.Elements.Select(ParseEnumMember)]);
         }
 
-        private IrEnumMember ParseEnumMember(GMIDLNode<GMIDLEnumElement> enm)
-        {
-            return new IrEnumMember(enm.Name, enm.Data.Value);
-        }
+        private static IrEnumMember ParseEnumMember(GMIDLNode<GMIDLEnumElement> enm)
+            => new(enm.Name, enm.Data.Value);
 
         private IrStruct ParseStruct(GMIDLNode<GMIDLClass> cls)
         {
-            return new(cls.Name[2..^2], [.. cls.Data.Properties.Where(p => p.Attributes.Enabled("field")).Select(ParseField)]);
+            var name = StripClassName(cls.Name);
+
+            var fields =
+                cls.Data.Properties
+                   .Where(p => p.Attributes.Enabled("field"))
+                   .Select(ParseField)
+                   .ToImmutableArray();
+
+            return new IrStruct(name, fields);
         }
 
         private IrField ParseField(GMIDLNode<GMIDLProperty> f)
         {
             var attributes = f.Attributes;
-            var value = attributes.GetAsString("value") ?? attributes.GetAsString("value");
 
-            bool v = bool.TryParse(f.Attributes.GetAsString("optional") ?? "false", out bool isOptional);
-            var type = ParseType(f.Data.Type, f.Attributes);
+            var value = attributes.GetAsString("value");
 
-            return new(f.Name, type, null, !isOptional, Value: value);
+            bool isOptional = bool.TryParse(attributes.GetAsString("optional") ?? "false", out var opt) && opt;
+
+            // Some GMIDL shapes already mark optional on the node; keep attribute too
+            if (isOptional) attributes.Enable("optional");
+
+            var type = ParseType(f.Data.Type, attributes);
+
+            return new IrField(
+                Name: f.Name,
+                Type: type,
+                DefaultLiteral: value,
+                Required: !isOptional,
+                Value: value);
         }
 
         private IrFunction ParseFunction(GMIDLNode<GMIDLFunction> func)
         {
-            return new(func.Name, ParseType(func.Data.ReturnType, func.Attributes), [.. func.Data.NamedArgs.Select(ParseParam)]);
+            return new IrFunction(
+                func.Name,
+                ParseType(func.Data.ReturnType, func.Attributes),
+                [.. func.Data.NamedArgs.Select(ParseParam)]);
         }
 
         private IrParameter ParseParam(GMIDLNode<GMIDLFunctionArg> param)
         {
-            if (param.Data.Optional) param.Attributes.Enable("optional");
-            return new(param.Name, ParseType(param.Data.Type, param.Attributes), param.Data.Optional);
+            if (param.Data.Optional)
+                param.Attributes.Enable("optional");
+
+            return new IrParameter(
+                param.Name,
+                ParseType(param.Data.Type, param.Attributes),
+                param.Data.Optional);
         }
 
         private IrType ParseType(GMIDLType gmidlType, GMIDLAttributes attributes)
         {
-            var primitiveType = gmidlType.PrimitiveOrNull() ?? throw new InvalidOperationException("Invalid or not supported type");
+            var primitiveType = gmidlType.PrimitiveOrNull()
+                ?? throw new InvalidOperationException("Invalid or unsupported type");
+
             return ParseType(primitiveType, attributes);
-        }
-
-        private readonly Dictionary<string, GMIDLPrimitive> _hintToPrimitive = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["double"] = GMIDLPrimitive.Double,
-            ["real"] = GMIDLPrimitive.Double,
-            ["float"] = GMIDLPrimitive.Float,
-            ["int"] = GMIDLPrimitive.Int32,
-            ["int32"] = GMIDLPrimitive.Int32,
-            ["uint"] = GMIDLPrimitive.UInt32,
-            ["uint32"] = GMIDLPrimitive.UInt32,
-            ["int64"] = GMIDLPrimitive.Int64,
-            ["bool"] = GMIDLPrimitive.Bool,
-            ["string"] = GMIDLPrimitive.String,
-            ["object"] = GMIDLPrimitive.Object,
-            ["array"] = GMIDLPrimitive.Array,
-            ["any"] = GMIDLPrimitive.GMVal,
-            ["func"] = GMIDLPrimitive.Function,
-            ["function"] = GMIDLPrimitive.Function,
-        };
-
-        private IrType ResolveNamed(string name, bool isOptional, bool isCollection, int? withLength)
-        {
-            if (_typeSymbols.TryGetValue(name, out var kind))
-            {
-                return kind switch
-                {
-                    IrSymbolKind.Enum =>
-                        new IrType(IrTypeKind.Enum, name,
-                            isCollection, withLength, isOptional, Underlying: _enums.First(e => e.Name == name).Underlying),
-
-                    IrSymbolKind.Struct =>
-                        new IrType(IrTypeKind.Struct, name,
-                            isCollection, withLength, isOptional),
-
-                    _ => throw new InvalidOperationException($"Unknown symbol kind for '{name}'.")
-                };
-            }
-
-            return new IrType(IrTypeKind.Error, name, isCollection, withLength, isOptional);
         }
 
         private IrType ParseType(GMIDLPrimitive? primitiveType, GMIDLAttributes attributes)
         {
+            // Base flags from attributes
             var isOptional = attributes.Enabled("optional");
             var isCollection = false;
-            int? withLength = null;
+            int? fixedLen = null;
 
+            // Optional: override / augment using hint syntax, e.g.:
+            //   "int32[]"   "Foo[4]"  "Bar?"  "Baz[]?"
             var typeHint = attributes.GetAsString("type_hint") ?? attributes.GetAsString("hint");
-            if (typeHint is not null)
+            if (!string.IsNullOrWhiteSpace(typeHint))
             {
+                // trailing '?'
                 var optionalMatch = _matchOptional.Match(typeHint);
                 if (optionalMatch.Success)
                 {
@@ -158,105 +224,144 @@ namespace extgen.Parsing.Gmidl
                     isOptional = true;
                 }
 
+                // trailing [N] or []
                 var collectionMatch = _matchCollection.Match(typeHint);
                 if (collectionMatch.Success)
                 {
                     isCollection = true;
                     typeHint = typeHint[..^collectionMatch.Value.Length];
+
                     if (collectionMatch.Groups["withLength"].Length > 0)
-                        withLength = int.Parse(collectionMatch.Groups["withLength"].Value);
+                        fixedLen = int.Parse(collectionMatch.Groups["withLength"].Value);
                 }
 
-                primitiveType = _hintToPrimitive.TryGetValue(typeHint, out var value) ? value : null;
+                // If hint maps to a primitive, override primitiveType; else treat as Named
+                if (_hintToPrimitive.TryGetValue(typeHint, out var hintPrim))
+                    primitiveType = hintPrim;
+                else
+                    primitiveType = null;
             }
 
-            return primitiveType switch
+            // 1) Parse the *core* (non-nullable, non-collection) type
+            var core = primitiveType switch
             {
-                GMIDLPrimitive.Double => IrType.Double with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Float => IrType.Float with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Int32 => IrType.Int32 with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.UInt32 => IrType.UInt32 with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Int64 => IrType.Int64 with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Bool => IrType.Bool with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.String => IrType.String with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.CString => IrType.String with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Function => IrType.Function with { IsNullable = isOptional, IsCollection = isCollection, FixedLength = withLength },
-                GMIDLPrimitive.Array => IrType.AnyArray with { IsNullable = isOptional },
-                GMIDLPrimitive.Object => IrType.AnyMap with { IsNullable = isOptional },
-                GMIDLPrimitive.Unit => IrType.Void,
+                GMIDLPrimitive.Double => IrType.Double,
+                GMIDLPrimitive.Float => IrType.Float,
+                GMIDLPrimitive.Int32 => IrType.Int32,
+                GMIDLPrimitive.UInt32 => IrType.UInt32,
+                GMIDLPrimitive.Int64 => IrType.Int64,
+                GMIDLPrimitive.Bool => IrType.Bool,
+                GMIDLPrimitive.String => IrType.String,
+                GMIDLPrimitive.CString => IrType.String,
+
+                GMIDLPrimitive.Function => IrType.Function,
+
+                // Dynamic-ish
+                GMIDLPrimitive.Array => IrType.AnyArray,
+                GMIDLPrimitive.Object => IrType.AnyMap,
                 GMIDLPrimitive.GMVal => IrType.Any,
-                GMIDLPrimitive.Boxed => throw new NotImplementedException(),
-                GMIDLPrimitive.Pointer => throw new NotImplementedException(),
-                _ => typeHint is null
-                        ? throw new InvalidOperationException("Invalid or unsupported type")
-                        : ResolveFromHint(typeHint, isOptional, isCollection, withLength)
+
+                GMIDLPrimitive.Unit => IrType.Void,
+
+                // Any other primitive not supported -> resolve from hint or throw
+                _ => ResolveFromHintOrNamed(typeHint)
             };
 
-            IrType ResolveFromHint(string hint, bool isOpt, bool isColl, int? len)
+            // 2) Apply collection wrapper
+            if (isCollection)
+                core = IrType.MakeArray(core, fixedLen);
+
+            // 3) Apply nullable wrapper
+            if (isOptional)
+                core = IrType.MakeNullable(core);
+
+            return core;
+
+            // ---------------- local helper ----------------
+
+            IrType ResolveFromHintOrNamed(string? hint)
             {
-                if (hint.Equals("uint8", StringComparison.OrdinalIgnoreCase))
-                    return IrType.UInt8 with { IsNullable = isOpt, IsCollection = isColl, FixedLength = len };
+                if (string.IsNullOrWhiteSpace(hint))
+                    throw new InvalidOperationException("Invalid or unsupported type (no primitive, no hint).");
 
-                if (hint.Equals("int8", StringComparison.OrdinalIgnoreCase))
-                    return IrType.Int8 with { IsNullable = isOpt, IsCollection = isColl, FixedLength = len };
+                // 1) Direct IrType builtins (covers gaps in GMIDLPrimitive)
+                if (_hintToIrBuiltin.TryGetValue(hint, out var ir))
+                    return ir;
 
-                if (hint.Equals("uint64", StringComparison.OrdinalIgnoreCase))
-                    return IrType.UInt64 with { IsNullable = isOpt, IsCollection = isColl, FixedLength = len };
-
-                // builtin keywords that are not in GMIDLPrimitive mapping, if any:
-                if (hint.Equals("buffer", StringComparison.OrdinalIgnoreCase))
-                    return IrType.Buffer with { IsNullable = isOpt, IsCollection = isColl, FixedLength = len };
-
-                // named types (enum/struct)
-                return ResolveNamed(hint, isOpt, isColl, len);
+                // 2) Named types (enum/struct)
+                return ResolveNamed(hint);
             }
+
+        }
+
+        private IrType ResolveNamed(string name)
+        {
+            if (_typeSymbols.TryGetValue(name, out var kind))
+            {
+                return kind switch
+                {
+                    IrSymbolKind.Enum => new IrType.Named(NamedKind.Enum, name),
+                    IrSymbolKind.Struct => new IrType.Named(NamedKind.Struct, name),
+                    _ => throw new InvalidOperationException($"Unknown symbol kind for '{name}'.")
+                };
+            }
+
+            // You can choose to throw here instead (stricter),
+            // but keeping "unknown named type" visible is often useful during iteration.
+            throw new InvalidOperationException($"Unknown named type '{name}'. Did you forget to declare it?");
         }
 
         private static ImmutableArray<IrStruct> TopologicallySortStructs(ImmutableArray<IrStruct> structs)
         {
             var byName = structs.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
-            // build empty adjacency and indegree
-            var adj = structs.ToDictionary(s => s.Name, _ => new HashSet<string>(StringComparer.Ordinal),
-                                            StringComparer.Ordinal);
+            var adj = structs.ToDictionary(
+                s => s.Name,
+                _ => new HashSet<string>(StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
             var indeg = structs.ToDictionary(s => s.Name, _ => 0, StringComparer.Ordinal);
 
-            // for each struct s, for each dependency d that s uses-by-value,
-            // add edge d -> s and bump indegree(s)
+            // Edge: dep -> s
             foreach (var s in structs)
             {
-                var depsOfS = CollectStructDeps(s);
-                foreach (var d in depsOfS)
+                var deps = CollectStructDeps(s);
+                foreach (var d in deps)
                 {
-                    if (!adj.ContainsKey(d)) continue;        // ignore unknowns
+                    if (!adj.ContainsKey(d)) continue;
                     if (adj[d].Add(s.Name))
                         indeg[s.Name]++;
                 }
             }
 
-            // Kahn's: start with nodes whose indegree==0 (true leaves = no deps)
             var pos = structs.Select((s, i) => (s.Name, i))
                              .ToDictionary(t => t.Name, t => t.i, StringComparer.Ordinal);
 
-            var q = new Queue<string>(indeg.Where(kv => kv.Value == 0)
-                                           .OrderBy(kv => pos[kv.Key])
-                                           .Select(kv => kv.Key));
+            var q = new Queue<string>(
+                indeg.Where(kv => kv.Value == 0)
+                     .OrderBy(kv => pos[kv.Key])
+                     .Select(kv => kv.Key));
 
             var ordered = new List<IrStruct>(structs.Length);
+
             while (q.Count > 0)
             {
                 var u = q.Dequeue();
                 ordered.Add(byName[u]);
+
                 foreach (var v in adj[u])
-                    if (--indeg[v] == 0) q.Enqueue(v);
+                {
+                    if (--indeg[v] == 0)
+                        q.Enqueue(v);
+                }
             }
 
             if (ordered.Count != structs.Length)
-                throw new InvalidOperationException("Struct dependency cycle detected …");
+                throw new InvalidOperationException("Struct dependency cycle detected.");
 
             return [.. ordered];
 
-            // --- local helpers ---
+            // ---- local helpers ----
 
             static HashSet<string> CollectStructDeps(IrStruct s)
             {
@@ -268,26 +373,23 @@ namespace extgen.Parsing.Gmidl
 
             static void CollectFromType(IrType t, HashSet<string> set)
             {
-                // Collections still require complete element type (vector<T>, array<T,N>)
-                if (t.IsCollection)
+                // array<T> depends on T
+                if (t is IrType.Array a)
                 {
-                    var el = t with { IsCollection = false, FixedLength = null };
-                    CollectFromType(el, set);
+                    CollectFromType(a.Element, set);
                     return;
                 }
 
-                // Nullable (optional<T>) also needs complete T at class definition
-                if (t.IsNullable)
+                // optional<T> depends on T
+                if (t is IrType.Nullable n)
                 {
-                    var inner = t with { IsNullable = false };
-                    CollectFromType(inner, set);
+                    CollectFromType(n.Underlying, set);
                     return;
                 }
 
-                if (t.Kind == IrTypeKind.Struct)
-                    set.Add(t.Name);
-
-                // If you later support e.g. Map<string, Struct>, Variant<Struct,...>, add cases here.
+                // struct dependency
+                if (t is IrType.Named { Kind: NamedKind.Struct, Name: var name })
+                    set.Add(name);
             }
         }
 

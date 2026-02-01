@@ -2,6 +2,7 @@
 using extgen.Emitters.Cmake;
 using extgen.Emitters.Cpp;
 using extgen.Emitters.Doc;
+using extgen.Emitters.Gml;
 using extgen.Emitters.Java;
 using extgen.Emitters.Jni;
 using extgen.Emitters.Kotlin;

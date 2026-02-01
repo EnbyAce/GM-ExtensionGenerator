@@ -1,13 +1,14 @@
-﻿using codegencore.Writers.Concrete;
+﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
+using extgen.Emitters.Java;
 using extgen.Emitters.Objc;
 using extgen.Emitters.Utils;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Objc;
 using extgen.Utils;
-using System.Text;
 
 namespace extgen.Emitters.ObjcNative
 {
@@ -42,7 +43,8 @@ namespace extgen.Emitters.ObjcNative
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{ext}Internal_{platform}.h", w => EmitInternalHeader(ctx, c, w));
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{ext}Internal_{platform}.mm", w => EmitInternalImpl(ctx, c, w));
 
-            ObjcBridge bridge = new();
+            var enums = new IrTypeEnumResolver(c.Enums);
+            ObjcBridge bridge = new(enums);
 
             ObjcCommonEmitter common = new(ctx, typeMap, bridge);
             common.EmitObjcUserShell(c, layout);
@@ -61,8 +63,8 @@ namespace extgen.Emitters.ObjcNative
             w.Import("Foundation/Foundation.h", true)
              .Line();
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             // ObjC interface
             w.Interface($"{ext}Internal", body: iBody =>
@@ -98,8 +100,8 @@ namespace extgen.Emitters.ObjcNative
              .Import($"native/{ext}Internal_native.h")
              .Line();
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             w.Implementation($"{ext}Internal", implBody =>
             {

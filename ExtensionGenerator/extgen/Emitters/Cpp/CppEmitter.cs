@@ -1,14 +1,18 @@
-﻿using codegencore.Writers.Concrete;
+﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Emitters.Utils;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Cpp;
 using extgen.Utils;
-using System.Text;
 
 namespace extgen.Emitters.Cpp
 {
+    internal sealed record CppEmitServices(
+        IIrTypeEnumResolver Enums
+    );
+
     public sealed class CppEmitter(CppEmitterOptions options, RuntimeNaming runtime) : IIrEmitter
     {
         private readonly CppTypeMap typeMap = new(runtime);
@@ -18,13 +22,15 @@ namespace extgen.Emitters.Cpp
             var ctx = new CppEmitterContext(comp.Name, options, runtime);
             var ext = comp.Name;
 
+            var enums = new IrTypeEnumResolver(comp.Enums);
+
             var layout = new CppLayout(dir, options);
 
             // 1) code gen files (always overwrite)
             GenCommonFiles(layout.CoreDir);
 
-            FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.h", w => EmitInternalHeader(ctx, comp, w));
-            FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.cpp", w => EmitInternalImpl(ctx, comp, w));
+            FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.h", w => EmitInternalHeader(ctx, comp, enums, w));
+            FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.cpp", w => EmitInternalImpl(ctx, comp, enums, w));
 
             FileEmitHelpers.WriteCppIfMissing(layout.SourceDir, $"{string.Format(options.UserImplOutputName, ext)}.h", w => EmitUserHeader(ctx, w));
             FileEmitHelpers.WriteCppIfMissing(layout.SourceDir, $"{string.Format(options.UserImplOutputName, ext)}.cpp", w => EmitUserImpl(ctx, w));
@@ -45,9 +51,9 @@ namespace extgen.Emitters.Cpp
         //    - exposes C entry points __EXT_NATIVE__...
         // =====================================================================
 
-        private void EmitInternalHeader(CppEmitterContext ctx, IrCompilation c, CppWriter w)
+        private void EmitInternalHeader(CppEmitterContext ctx, IrCompilation c, IIrTypeEnumResolver enums, CppWriter w)
         {
-            CppCommonEmitter<CppWriter> common = new(ctx, typeMap);
+            CppCommonEmitter<CppWriter> common = new(ctx, typeMap, enums);
 
             w.PragmaOnce();
 
@@ -55,8 +61,8 @@ namespace extgen.Emitters.Cpp
             w.Include("core/GMExtWire.h", false).Line();
             common.EmitCommonCppArtifacts(w, c);
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             if (usesFunctions)
             {
@@ -92,9 +98,9 @@ namespace extgen.Emitters.Cpp
             }
         }
 
-        private void EmitInternalImpl(CppEmitterContext ctx, IrCompilation c, CppWriter w)
+        private void EmitInternalImpl(CppEmitterContext ctx, IrCompilation c, IIrTypeEnumResolver enums, CppWriter w)
         {
-            CppCommonEmitter<CppWriter> common = new(ctx, typeMap);
+            CppCommonEmitter<CppWriter> common = new(ctx, typeMap, enums);
 
             // Local includes
             w.Include($"{ctx.ExtName}Internal_native.h", false)
@@ -103,8 +109,8 @@ namespace extgen.Emitters.Cpp
             .UsingNamespace(ctx.Runtime.CodeGenNamespace)
             .Line();
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             if (usesFunctions)
             {
@@ -150,12 +156,12 @@ namespace extgen.Emitters.Cpp
                 {
                     var callArgs = common.EmitDecode(funcBody, fn, needsArgBuffer, ctx.Runtime.BufferReaderVar);
 
-                    if (fn.ReturnType.IsStringScalar)
+                    if (fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.String })
                     {
                         funcBody.Line($"static std::string {ctx.Runtime.ResultVar};");
                         funcBody.Assign(ctx.Runtime.ResultVar, e => e.Call(fn.Name, [.. callArgs]));
                     }
-                    else if (fn.ReturnType.Kind != IrTypeKind.Void)
+                    else if (!(fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Void }))
                         funcBody.Assign(ctx.Runtime.ResultVar, e => e.Call(fn.Name, [.. callArgs]), "auto&&");
                     else
                         funcBody.Call(fn.Name, [.. callArgs]).Line(";");

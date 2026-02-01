@@ -1,4 +1,4 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
 
 namespace extgen.Emitters.Utils
 {
@@ -11,9 +11,7 @@ namespace extgen.Emitters.Utils
     {
         public ExportType Classify(IrType t)
         {
-            if (t.IsNumericScalar) return ExportType.Double;
-            if (t.IsStringScalar) return ExportType.String;
-            if (t.Kind == IrTypeKind.Enum) return ExportType.Double;
+            if (t is IrType.Builtin { Kind: BuiltinKind.String }) return ExportType.String;
 
             return ExportType.Double; // conservative fallback
         }

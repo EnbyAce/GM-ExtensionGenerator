@@ -1,9 +1,11 @@
+using codegencore.Model;
 using codegencore.Writers.Concrete;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Swift;
 using extgen.Emitters.Objc;
 using extgen.Emitters.Utils;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Cpp;
 using extgen.TypeSystem.Swift;
@@ -13,9 +15,13 @@ using System.Text;
 
 namespace extgen.Emitters.Swift
 {
+    internal sealed record AppleEmitServices(
+        IIrTypeEnumResolver Enums
+    );
+
     public sealed class SwiftEmitter(IObjcEmitterOptions options, RuntimeNaming runtime) : IIrEmitter
     {
-        private readonly SwiftTypeMap typeMap = new(runtime);
+        private readonly SwiftTypeMap typeMap = new();
 
         public void Emit(IrCompilation comp, string dir)
         {
@@ -28,17 +34,18 @@ namespace extgen.Emitters.Swift
         private void EmitAll(ObjcEmitterContext ctx, IrCompilation c, ObjcLayout layout)
         {
             CppTypeMap cppTypeMap = new(ctx.Runtime);
-            
+
             // Swift flavor bridge on ObjC side
             SwiftBridge bridge = new();
+            var enums = new IrTypeEnumResolver(c.Enums);
 
             ObjcCommonEmitter common = new(ctx, cppTypeMap, bridge);
             common.EmitInternal(c, layout);
             common.EmitObjcUserShell(c, layout);
 
             // Swift base (always regenerated)
-            FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}Artifacts.swift", w => EmitArtifacts(w, c));
-            FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}InternalSwift.swift", w => EmitInternalSwift(ctx, c, w));
+            FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}Artifacts.swift", w => EmitArtifacts(w, c, enums));
+            FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}InternalSwift.swift", w => EmitInternalSwift(ctx, c, w, enums));
 
             // user Swift file (only if missing)
             FileEmitHelpers.WriteSwiftIfMissing(layout.SourceDir, $"{ctx.ExtName}Swift.swift", w => EmitUserSwift(ctx, c, w));
@@ -48,19 +55,20 @@ namespace extgen.Emitters.Swift
         // 1. SWIFT ARTIFACTS
         // =====================================================================
 
-        private void EmitArtifacts(SwiftWriter w, IrCompilation c)
+        private void EmitArtifacts(SwiftWriter w, IrCompilation c, IIrTypeEnumResolver enums)
         {
             EmitConsts(w, c.Constants);
             EmitEnums(w, c.Enums);
             EmitStructs(w, c.Structs);
-            EmitStructCodecs(w, c.Structs);
+            EmitStructCodecs(w, c.Structs, enums);
         }
 
         // ------------------- Constants -------------------
 
         private void EmitConsts(SwiftWriter w, ImmutableArray<IrConstant> constants)
         {
-            foreach (var c in constants) {
+            foreach (var c in constants)
+            {
                 w.Let(c.Name, typeMap.Map(c.Type), c.Literal);
             }
         }
@@ -71,14 +79,14 @@ namespace extgen.Emitters.Swift
         {
             foreach (var e in enums)
             {
-                // Underlying scalar, e.g. Int32
                 var underlying = e.Underlying
-                                  ?? throw new InvalidOperationException($"Enum {e.Name} has no underlying type.");
-                var rawType = typeMap.MapScalar(underlying, owned: false);
+                    ?? throw new InvalidOperationException($"Enum {e.Name} has no underlying type.");
+
+                var rawType = typeMap.Map(underlying, owned: false);
 
                 var members = e.Members.Select(m => new EnumMember(
                     m.Name,
-                    m.DefaultLiteral,   // the numeric raw value as string, e.g. "0", "1"
+                    m.DefaultLiteral,
                     Comment: null));
 
                 w.Enum(e.Name, members, rawType, modifiers: ["public"]);
@@ -105,37 +113,31 @@ namespace extgen.Emitters.Swift
             }
         }
 
-        // --------------------- ITypedStruct codecs ---------------------
+        // --------------------- Struct codecs ---------------------
 
-        private void EmitStructCodecs(SwiftWriter w, IImmutableList<IrStruct> structs)
+        private void EmitStructCodecs(SwiftWriter w, IImmutableList<IrStruct> structs, IIrTypeEnumResolver enums)
         {
             int codecId = 0;
-
-            SwiftWireHelpers wireHelpers = new(runtime, typeMap);
+            SwiftWireHelpers wireHelpers = new(runtime, typeMap, enums);
 
             foreach (var s in structs)
             {
                 w.Extension(s.Name, body =>
                 {
-                    // static let codecID: UInt32 = N
                     body.Line($"public static let codecID: UInt32 = {codecId}");
-
                     body.Line();
 
-                    // init<R: IByteReader>(_ r: inout R) throws
                     body.Line("public init<R: IByteReader>(_ r: inout R) throws");
                     body.Block(init =>
                     {
                         foreach (var f in s.Fields)
                         {
-                            // Decode into self.field
                             wireHelpers.DecodeLines(init, f.Type, $"self.{f.Name}", declare: false, bufferVar: "r");
                         }
                     }, trailingNewLine: true);
 
                     body.Line();
 
-                    // func encode<W: IByteWriter>(_ w: inout W) throws
                     body.Line("public func encode<W: IByteWriter>(_ w: inout W) throws");
                     body.Block(enc =>
                     {
@@ -151,16 +153,14 @@ namespace extgen.Emitters.Swift
             }
         }
 
-
         // =====================================================================
-        // 2. USER SWIFT STUB
+        // 2. INTERNAL SWIFT
         // =====================================================================
 
-        private void EmitInternalSwift(ObjcEmitterContext ctx, IrCompilation c, SwiftWriter w)
+        private void EmitInternalSwift(ObjcEmitterContext ctx, IrCompilation c, SwiftWriter w, IIrTypeEnumResolver enums)
         {
             var ext = c.Name;
-            var runtime = ctx.Runtime;
-            var typeMap = new SwiftTypeMap(runtime);
+            var rt = ctx.Runtime;
 
             // Imports
             w.Import("Foundation")
@@ -168,23 +168,19 @@ namespace extgen.Emitters.Swift
              .Import("CxxStdlib")
              .Line();
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => IrTypeUtil.ContainsBuiltin(p.Type, BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => IrTypeUtil.ContainsBuiltin(p.Type, BuiltinKind.Buffer)));
 
-            // Base class that owns the wire entrypoints + open user-friendly API.
             w.Class(
                 name: $"{ext}InternalSwift",
                 modifiers: ["open"],
                 inher: null,
                 body: cls =>
                 {
-                    // ---------------------------------------------------
-                    // 1) Internal fields (__dispatch_queue, __buffer_queue)
-                    // ---------------------------------------------------
                     if (usesFunctions)
                     {
                         cls.Var(
-                            name: runtime.DispatchQueueField,        // e.g. "__dispatch_queue"
+                            name: rt.DispatchQueueField,
                             type: "GMDispatchQueue",
                             init: "GMDispatchQueue()",
                             modifiers: ["internal"]);
@@ -193,7 +189,7 @@ namespace extgen.Emitters.Swift
                     if (usesBuffers)
                     {
                         cls.Var(
-                            name: runtime.BufferQueueField,          // e.g. "__buffer_queue"
+                            name: rt.BufferQueueField,
                             type: "[GMBuffer]",
                             init: "[]",
                             modifiers: ["internal"]);
@@ -201,24 +197,11 @@ namespace extgen.Emitters.Swift
 
                     cls.Line();
 
-                    // public init() {}
-                    cls.Init(
-                        parameters: [],
-                        modifiers: ["public"],
-                        body: _ => { });
-
+                    cls.Init(parameters: [], modifiers: ["public"], body: _ => { });
                     cls.Line();
 
-                    // ---------------------------------------------------
-                    // 2) Generated functions (user-facing + __EXT_SWIFT__)
-                    // ---------------------------------------------------
-                    EmitInternalSwiftFunctions(ctx, c.Functions, cls, typeMap);
+                    EmitInternalSwiftFunctions(ctx, c.Functions, cls, typeMap, enums);
 
-                    // ---------------------------------------------------
-                    // 3) Extra internal wire methods:
-                    //    __EXT_SWIFT__ExtName_invocation_handler
-                    //    __EXT_SWIFT__ExtName_queue_buffer
-                    // ---------------------------------------------------
                     if (usesFunctions)
                     {
                         EmitSwiftInvocationHandler(ctx, cls);
@@ -230,17 +213,20 @@ namespace extgen.Emitters.Swift
                         EmitSwiftQueueBuffer(ctx, cls);
                         cls.Line();
                     }
-
                 });
         }
+
+        // =====================================================================
+        // 3. USER SWIFT STUB
+        // =====================================================================
 
         private void EmitUserSwift(ObjcEmitterContext ctx, IrCompilation c, SwiftWriter w)
         {
             var ext = c.Name;
 
             w.Import("Foundation")
-              .Import("CxxStdlib")
-              .Line();
+             .Import("CxxStdlib")
+             .Line();
 
             w.Class($"{ext}Swift",
                 modifiers: ["public"],
@@ -254,22 +240,27 @@ namespace extgen.Emitters.Swift
 
                     foreach (var fn in c.Functions)
                     {
-                        var ret = typeMap.Map(fn.ReturnType, false);
+                        var ret = typeMap.Map(fn.ReturnType, owned: false);
+
                         var ps = fn.Parameters.Select(p =>
                             new SwiftParam(
                                 External: p.Name,
                                 Internal: p.Name,
-                                Type: typeMap.Map(p.Type, false))
+                                Type: typeMap.Map(p.Type, owned: false))
                         );
 
-                        cls.Func(fn.Name, ps, fn.ReturnType.Kind == IrTypeKind.Void ? null : ret,
+                        cls.Func(
+                            fn.Name,
+                            ps,
+                            IrTypeUtil.IsVoid(fn.ReturnType) ? null : ret,
                             modifiers: ["public", "override"],
                             body: m =>
                             {
                                 m.Line($"// TODO: implement {fn.Name}");
-                                if (fn.ReturnType.Kind != IrTypeKind.Void)
+
+                                if (!IrTypeUtil.IsVoid(fn.ReturnType))
                                 {
-                                    if (fn.ReturnType.Kind == IrTypeKind.Struct)
+                                    if (fn.ReturnType is IrType.Named { Kind: NamedKind.Struct })
                                         m.Line($"fatalError(\"{fn.Name} is not implemented\")");
                                     else
                                         m.Line($"return {DefaultSwiftValue(typeMap, fn.ReturnType, fn.Name)}");
@@ -285,22 +276,15 @@ namespace extgen.Emitters.Swift
 
         private static void EmitSwiftInvocationHandler(ObjcEmitterContext ctx, SwiftWriter w)
         {
-            var runtime = ctx.Runtime;
+            var rt = ctx.Runtime;
             var ext = ctx.ExtName;
 
-            var name = $"{runtime.SwiftPrefix}{ext}_invocation_handler";
-            // e.g. "__EXT_SWIFT__ExtDiscordSDK_invocation_handler"
+            var name = $"{rt.SwiftPrefix}{ext}_invocation_handler";
 
             var ps = new[]
             {
-                new SwiftParam(
-                    External: "_",
-                    Internal: runtime.RetBufferParam,           // "__ret_buffer"
-                    Type: "UnsafeMutablePointer<CChar>?"),
-                new SwiftParam(
-                    External: "arg1",
-                    Internal: runtime.RetBufferLengthParam,     // "__ret_buffer_length"
-                    Type: "Double"),
+                new SwiftParam("_", rt.RetBufferParam, "UnsafeMutablePointer<CChar>?"),
+                new SwiftParam("arg1", rt.RetBufferLengthParam, "Double"),
             };
 
             w.Func(
@@ -310,35 +294,26 @@ namespace extgen.Emitters.Swift
                 modifiers: ["public"],
                 body: body =>
                 {
-                    // var __bw = BufferWriter(base: UnsafeMutableRawPointer(__ret_buffer!), size: Int(__ret_buffer_length))
                     body.Line(
-                        $"var {runtime.BufferWriterVar} = BufferWriter(" +
-                        $"base: UnsafeMutableRawPointer({runtime.RetBufferParam}!), " +
-                        $"size: Int({runtime.RetBufferLengthParam}))");
+                        $"var {rt.BufferWriterVar} = BufferWriter(" +
+                        $"base: UnsafeMutableRawPointer({rt.RetBufferParam}!), " +
+                        $"size: Int({rt.RetBufferLengthParam}))");
 
-                    // return __dispatch_queue.fetch(into: &__bw)
-                    body.Line($"return {runtime.DispatchQueueField}.fetch(into: &{runtime.BufferWriterVar})");
+                    body.Line($"return {rt.DispatchQueueField}.fetch(into: &{rt.BufferWriterVar})");
                 });
         }
 
         private static void EmitSwiftQueueBuffer(ObjcEmitterContext ctx, SwiftWriter w)
         {
-            var runtime = ctx.Runtime;
+            var rt = ctx.Runtime;
             var ext = ctx.ExtName;
 
-            var name = $"{runtime.SwiftPrefix}{ext}_queue_buffer";
-            // e.g. "__EXT_SWIFT__ExtDiscordSDK_queue_buffer"
+            var name = $"{rt.SwiftPrefix}{ext}_queue_buffer";
 
             var ps = new[]
             {
-                new SwiftParam(
-                    External: "_",
-                    Internal: runtime.ArgBufferParam,           // "__arg_buffer"
-                    Type: "UnsafeMutablePointer<CChar>?"),
-                new SwiftParam(
-                    External: "arg1",
-                    Internal: runtime.ArgBufferLengthParam,     // "__arg_buffer_length"
-                    Type: "Double"),
+                new SwiftParam("_", rt.ArgBufferParam, "UnsafeMutablePointer<CChar>?"),
+                new SwiftParam("arg1", rt.ArgBufferLengthParam, "Double"),
             };
 
             w.Func(
@@ -349,8 +324,8 @@ namespace extgen.Emitters.Swift
                 body: body =>
                 {
                     body.Lines($$"""
-                        let size = Int({{runtime.ArgBufferLengthParam}})
-                        guard size > 0, let base = UnsafeMutableRawPointer({{runtime.ArgBufferParam}}) else {
+                        let size = Int({{rt.ArgBufferLengthParam}})
+                        guard size > 0, let base = UnsafeMutableRawPointer({{rt.ArgBufferParam}}) else {
                             return 0.0
                         }
 
@@ -361,23 +336,18 @@ namespace extgen.Emitters.Swift
                 });
         }
 
-        private void EmitInternalSwiftFunctions(ObjcEmitterContext ctx, ImmutableArray<IrFunction> fncs, SwiftWriter w, SwiftTypeMap typeMap)
+        private void EmitInternalSwiftFunctions(ObjcEmitterContext ctx, ImmutableArray<IrFunction> fncs, SwiftWriter w, SwiftTypeMap typeMap, IIrTypeEnumResolver enums)
         {
-            var runtime = ctx.Runtime;
-            var ext = ctx.ExtName;
+            var rt = ctx.Runtime;
 
-            // ============================================================
-            // 1) Open, user-overridable method with nice Swift types
-            // ============================================================
-
+            // 1) Open user-overridable methods
             foreach (var fn in fncs)
             {
-                var userParams = fn.Parameters.Select(p => new SwiftParam(External: p.Name, Internal: p.Name, Type: typeMap.Map(p.Type, owned: false)));
+                var userParams = fn.Parameters.Select(p =>
+                    new SwiftParam(p.Name, p.Name, typeMap.Map(p.Type, owned: false)));
 
                 string? userRetType =
-                    fn.ReturnType.Kind == IrTypeKind.Void
-                        ? null
-                        : typeMap.Map(fn.ReturnType, owned: true);
+                    IrTypeUtil.IsVoid(fn.ReturnType) ? null : typeMap.Map(fn.ReturnType, owned: true);
 
                 w.Func(
                     name: fn.Name,
@@ -387,38 +357,27 @@ namespace extgen.Emitters.Swift
                     body: body =>
                     {
                         body.Line($"// default stub for {fn.Name}");
-                        if (fn.ReturnType.Kind != IrTypeKind.Void)
+
+                        if (!IrTypeUtil.IsVoid(fn.ReturnType))
                         {
-                            // fall back to something sane; you can reuse existing SwiftDefault if you like
-                            if (fn.ReturnType.Kind == IrTypeKind.Struct)
-                            {
+                            if (fn.ReturnType is IrType.Named { Kind: NamedKind.Struct })
                                 body.Line($"fatalError(\"{fn.Name} is not implemented\")");
-                            }
                             else
-                            {
-                                var defExpr = DefaultSwiftValue(typeMap, fn.ReturnType, fn.Name);
-                                body.Line($"return {defExpr}");
-                            }
+                                body.Line($"return {DefaultSwiftValue(typeMap, fn.ReturnType, fn.Name)}");
                         }
                     });
+
                 w.Line();
             }
 
-            // ============================================================
-            // 2) Wire entrypoint: __EXT_SWIFT__{fn.Name}
-            //    This is what ObjC/ObjC++ calls.
-            // ============================================================
-
+            // 2) Wire entrypoints: __EXT_SWIFT__{fn.Name}
             foreach (var fn in fncs)
             {
                 var needsArgsBuffer = IrAnalysis.NeedsArgsBuffer(fn);
                 var needsRetBuffer = IrAnalysis.NeedsRetBuffer(fn);
 
-                var bridgeName = $"{runtime.SwiftPrefix}{fn.Name}";
-                // If you don't have SwiftNativePrefix, hardcode "__EXT_SWIFT__".
-
-                // Parameters for the wire entrypoint
-                var ps = ExportTypeUtils.ParamsFor(fn, runtime);
+                var bridgeName = $"{rt.SwiftPrefix}{fn.Name}";
+                var ps = ExportTypeUtils.ParamsFor(fn, rt);
                 var r = ExportTypeUtils.ReturnFor(fn);
 
                 w.Func(
@@ -433,9 +392,9 @@ namespace extgen.Emitters.Swift
                             body.Line("do");
                             body.Block(doBlock =>
                             {
-                                EmitInternalSwiftFunctionBody(fn, doBlock, runtime, needsArgsBuffer, needsRetBuffer);
-
+                                EmitInternalSwiftFunctionBody(fn, doBlock, rt, needsArgsBuffer, needsRetBuffer, enums);
                             }, true);
+
                             body.Line("catch");
                             body.Block(catchBlock =>
                             {
@@ -445,61 +404,44 @@ namespace extgen.Emitters.Swift
                         }
                         else
                         {
-                            EmitInternalSwiftFunctionBody(fn, body, runtime, needsArgsBuffer, needsRetBuffer);
+                            EmitInternalSwiftFunctionBody(fn, body, rt, needsArgsBuffer, needsRetBuffer, enums);
                         }
                     });
+
                 w.Line();
             }
         }
 
-        private void EmitInternalSwiftFunctionBody(IrFunction fn, SwiftWriter w, RuntimeNaming runtime, bool needsArgsBuffer, bool needsRetBuffer)
+        private void EmitInternalSwiftFunctionBody(IrFunction fn, SwiftWriter w, RuntimeNaming rt, bool needsArgsBuffer, bool needsRetBuffer, IIrTypeEnumResolver enums)
         {
-            // 1) Decode arguments (if any)
-            var callArgs = EmitDecode(
-                w,
-                fn,
-                needsArgsBuffer: needsArgsBuffer,
-                readerVar: runtime.BufferReaderVar);
-
-            // 2) Call the open user-facing method
+            var callArgs = EmitDecode(w, fn, needsArgsBuffer: needsArgsBuffer, readerVar: rt.BufferReaderVar, enums);
             var labeledArgs = string.Join(", ", callArgs);
 
-            if (fn.ReturnType.Kind == IrTypeKind.Void)
+            if (IrTypeUtil.IsVoid(fn.ReturnType))
             {
                 w.Line($"self.{fn.Name}({labeledArgs})");
                 w.Line("return 0.0");
                 return;
             }
 
-            // has return value
             w.Line($"let __result = self.{fn.Name}({labeledArgs})");
 
-            // 3) Encode return via helper - either into buffer or as Double/String
             EmitEncodeReturn(
                 w,
                 fn.ReturnType,
                 resultExpr: "__result",
                 needsRetBuffer: needsRetBuffer,
-                writerVar: runtime.BufferWriterVar);
+                writerVar: rt.BufferWriterVar, enums);
         }
 
-        /// <summary>
-        /// Decode arguments for a function into locals and build labeled call arguments
-        /// for the user-facing method.
-        ///
-        /// - If needsArgsBuffer == true: read from BufferReader over (__arg_buffer, __arg_buffer_length)
-        /// - If needsArgsBuffer == false: parameters are passed directly (as Doubles / Strings),
-        ///   and we just convert them into the Swift types the user method expects.
-        /// </summary>
-        public List<string> EmitDecode(SwiftWriter w, IrFunction fn, bool needsArgsBuffer, string readerVar)
+        public List<string> EmitDecode(SwiftWriter w, IrFunction fn, bool needsArgsBuffer, string readerVar, IIrTypeEnumResolver enums)
         {
-            SwiftWireHelpers wireHelpers = new(runtime, typeMap);
+            SwiftWireHelpers wireHelpers = new(runtime, typeMap, enums);
 
             var callArgs = new List<string>();
 
             if (needsArgsBuffer)
             {
-                // var __br = BufferReader(base: UnsafeRawPointer(__arg_buffer!), size: Int(__arg_buffer_length))
                 w.Line(
                     $"var {readerVar} = BufferReader(" +
                     $"base: UnsafeRawPointer({runtime.ArgBufferParam}!), " +
@@ -508,57 +450,46 @@ namespace extgen.Emitters.Swift
 
                 foreach (var p in fn.Parameters)
                 {
-                    w.Line($"// field: {p.Name}, type: {p.Type.Name}{(p.Type.IsCollection ? $"[{p.Type.FixedLength}]" : "")}");
+                    w.Line($"// field: {p.Name}, type: {IrTypeUtil.ToDebugString(p.Type)}");
+
                     wireHelpers.DecodeLines(
                         w,
                         p.Type,
                         accessor: p.Name,
                         declare: true,
-                        bufferVar: readerVar, owned: false);
-                    w.Line();
+                        bufferVar: readerVar,
+                        owned: false);
 
-                    // user method uses label == name
+                    w.Line();
                     callArgs.Add($"{p.Name}: {p.Name}");
                 }
 
                 return callArgs;
             }
 
-            // -------- Direct-arg mode (no arg buffer) ----------
-            // Here each parameter appears as its own Swift parameter
-            // on the __EXT_SWIFT__ method (e.g. Double, String).
-            //
-            // We convert from that "bridge" representation to
-            // the actual Swift type the user-friendly method expects.
-
+            // Direct-arg mode: convert from bridge primitives -> user-facing Swift type
             foreach (var p in fn.Parameters)
             {
-                var bridgeName = p.Name; // same name for the parameter in __EXT_SWIFT__ signature
+                var bridgeName = p.Name;
                 var t = p.Type;
+
                 string expr;
 
-                if (t.IsNumericScalar)
+                if (IrTypeUtil.IsNumericScalar(t))
                 {
                     var swiftType = typeMap.Map(t, owned: true);
 
-                    if (t.Name == "bool" || t.Name == "Bool")
-                    {
+                    if (IrTypeUtil.IsBool(t))
                         expr = $"{bridgeName} != 0";
-                    }
                     else
-                    {
                         expr = $"{swiftType}({bridgeName})";
-                    }
                 }
-                else if (t.IsStringScalar)
+                else if (IrTypeUtil.IsStringScalar(t))
                 {
-                    // Bridge type is String, and user type is String too.
                     expr = bridgeName;
                 }
                 else
                 {
-                    // If you ever mark more cases as "direct", handle them here.
-                    // For now, just pass directly (you can refine later).
                     expr = bridgeName;
                 }
 
@@ -568,15 +499,9 @@ namespace extgen.Emitters.Swift
             return callArgs;
         }
 
-        /// <summary>
-        /// Emit Swift code to encode the return value of a function, either:
-        /// - directly as Double or String when no ret buffer is needed, or
-        /// - into a BufferWriter over (__ret_buffer, __ret_buffer_length) when needed.
-        /// </summary>
-        public void EmitEncodeReturn(SwiftWriter w, IrType ret, string resultExpr, bool needsRetBuffer, string writerVar)
+        public void EmitEncodeReturn(SwiftWriter w, IrType ret, string resultExpr, bool needsRetBuffer, string writerVar, IIrTypeEnumResolver enums)
         {
-            // Void return – always just 0.0
-            if (ret.Kind == IrTypeKind.Void)
+            if (IrTypeUtil.IsVoid(ret))
             {
                 w.Line("return 0.0");
                 return;
@@ -584,70 +509,72 @@ namespace extgen.Emitters.Swift
 
             if (needsRetBuffer)
             {
-                SwiftWireHelpers wireHelpers = new(runtime, typeMap);
+                SwiftWireHelpers wireHelpers = new(runtime, typeMap, enums);
 
-                // Use BufferWriter over (__ret_buffer, __ret_buffer_length)
                 w.Lines(
                     $"var {writerVar} = BufferWriter(" +
                     $"base: UnsafeMutableRawPointer({runtime.RetBufferParam}!), " +
                     $"size: Int({runtime.RetBufferLengthParam}))");
                 w.Line();
-                w.Line($"// return: {resultExpr}, type: {ret.Name}{(ret.IsCollection ? $"[{ret.FixedLength}]" : "")}");
+
+                w.Line($"// return: {resultExpr}, type: {IrTypeUtil.ToDebugString(ret)}");
                 wireHelpers.EncodeLines(w, ret, accessor: resultExpr, bufferVar: writerVar);
+
                 w.Line("return 0.0");
                 return;
             }
 
-            // Direct-return path: map into Swift type that bridge expects.
-
-            if (ret.IsNumericScalar)
+            // Direct-return path: ONLY numeric scalar or string scalar
+            // Nullable is not representable as Double/String -> fallback
+            if (IrTypeUtil.ContainsNullable(ret))
             {
-                if (ret.Name == "bool")
-                    w.Line($"return {resultExpr} ? 1.0 : 0.0");
-                else
-                    w.Line($"return Double({resultExpr})");
+                w.Line("return 0.0");
                 return;
             }
 
-            if (ret.IsStringScalar)
+            if (IrTypeUtil.IsNumericScalar(ret))
             {
-                // Direct string return: Swift String -> C++ std::string via CxxStdlib bridge.
+                if (IrTypeUtil.IsBool(ret))
+                    w.Line($"return {resultExpr} ? 1.0 : 0.0");
+                else
+                    w.Line($"return Double({resultExpr})");
+
+                return;
+            }
+
+            if (IrTypeUtil.IsStringScalar(ret))
+            {
                 w.Line($"return {resultExpr}");
                 return;
             }
 
-            // Fallback – shouldn’t really happen with current IR rules.
             w.Line("return 0.0");
         }
 
-        /// <summary>
-        /// Simple default value generator for user stubs
-        /// (you can reuse / merge with your existing SwiftDefault).
-        /// </summary>
         private static string DefaultSwiftValue(SwiftTypeMap typeMap, IrType t, string funcName)
         {
-            if (t.Kind == IrTypeKind.Void) return "";
+            _ = funcName;
 
-            if (t.IsCollection)
-                return $"[]";
+            // Arrays -> []
+            if (t is IrType.Array)
+                return "[]";
 
-            if (t.IsNullable)
+            // Nullable -> nil
+            if (t is IrType.Nullable)
                 return "nil";
 
-            if (t.Kind == IrTypeKind.Struct)
-                return $"{typeMap.Map(t, owned: true)}()";
+            // Named struct -> Type()
+            if (t is IrType.Named { Kind: NamedKind.Struct } ns)
+                return $"{typeMap.Map(ns, owned: true)}()";
 
-            if (t.Kind == IrTypeKind.Enum)
-                return $"{typeMap.Map(t, owned: true)}(rawValue: 0)!";
+            // Named enum -> rawValue: 0
+            if (t is IrType.Named { Kind: NamedKind.Enum } ne)
+                return $"{typeMap.Map(ne, owned: true)}(rawValue: 0)!";
 
-            if (t.Kind == IrTypeKind.Scalar && t.Name == "string")
-                return "\"\"";
-
-            if (t.Kind == IrTypeKind.Scalar && t.Name == "bool")
-                return "false";
-
-            if (t.IsNumericScalar)
-                return "0";
+            // Builtins
+            if (IrTypeUtil.IsStringScalar(t)) return "\"\"";
+            if (IrTypeUtil.IsBool(t)) return "false";
+            if (IrTypeUtil.IsNumericScalar(t)) return "0";
 
             return "0";
         }

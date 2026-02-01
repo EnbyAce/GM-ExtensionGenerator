@@ -1,4 +1,5 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
+using extgen.Model;
 
 namespace extgen.Parsing.Validation
 {
@@ -32,7 +33,7 @@ namespace extgen.Parsing.Validation
                     memberName: c.Name))
                     yield return occ;
 
-            // Enums: underlying
+            // Enums: underlying (from IrEnum, not from IrType)
             foreach (var e in comp.Enums)
                 foreach (var occ in WalkType(e.Underlying,
                     $"Enums[{e.Name}].Underlying",
@@ -78,36 +79,33 @@ namespace extgen.Parsing.Validation
             string? ownerName,
             string? memberName)
         {
-            // This type occurrence
             yield return new IrTypeOccurrence(type, path, ownerKind, ownerName, memberName);
 
-            // Variant arms
-            if (type.Variants.Length > 0)
+            switch (type)
             {
-                for (int i = 0; i < type.Variants.Length; i++)
-                {
-                    var arm = type.Variants[i];
+                case IrType.Nullable n:
                     foreach (var occ in WalkType(
-                        arm,
-                        $"{path}.Variants[{i}]",
+                        n.Underlying,
+                        $"{path}.Underlying",
                         ownerKind,
                         ownerName,
                         memberName))
                         yield return occ;
-                }
-            }
+                    break;
 
-            // Underlying type (e.g., enum underlying)
-            if (type.Underlying is not null)
-            {
-                foreach (var occ in WalkType(
-                    type.Underlying,
-                    $"{path}.Underlying",
-                    ownerKind,
-                    ownerName,
-                    memberName))
-                    yield return occ;
+                case IrType.Array a:
+                    foreach (var occ in WalkType(
+                        a.Element,
+                        $"{path}.Element",
+                        ownerKind,
+                        ownerName,
+                        memberName))
+                        yield return occ;
+                    break;
+
+                    // Builtin / Named have no children
             }
         }
     }
+
 }

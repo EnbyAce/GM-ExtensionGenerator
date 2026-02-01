@@ -1,4 +1,5 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
 using extgen.Emitters.Objc;
 using extgen.Emitters.Utils;
@@ -43,9 +44,9 @@ namespace extgen.Bridge.Swift
             var returnType = fn.ReturnType;
             var targetName = $"{ctx.Runtime.SwiftPrefix}{fn.Name}";
 
-            if (returnType.Kind != IrTypeKind.Void)
+            if (!(returnType is IrType.Builtin { Kind: BuiltinKind.Void }))
             {
-                if (returnType.IsStringScalar)
+                if (returnType is IrType.Builtin { Kind: BuiltinKind.String })
                 {
                     fnBody.Line($"static std::string {resultVar};");
                     fnBody.Assign(resultVar, e => e.Call($"(std::string){implField}->{targetName}", [.. callArgs]));

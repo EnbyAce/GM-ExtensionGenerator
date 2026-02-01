@@ -1,8 +1,10 @@
 ﻿// Bridge/Java/JavaBridgeBase.cs
+using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Emitters.Java;
 using extgen.Emitters.Utils;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem;
 using System.Collections.Immutable;
@@ -50,7 +52,7 @@ namespace extgen.Bridge.Java
             ImmutableArray<IrFunction> funcs,
             JavaWriter w)
         {
-            var usesFunctions = funcs.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
+            var usesFunctions = funcs.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
             if (!usesFunctions)
                 return;
 
@@ -80,7 +82,7 @@ namespace extgen.Bridge.Java
             ImmutableArray<IrFunction> funcs,
             JavaWriter w)
         {
-            var usesBuffers = funcs.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesBuffers = funcs.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
             if (!usesBuffers)
                 return;
 
@@ -131,7 +133,7 @@ namespace extgen.Bridge.Java
 
                     EmitBeforeCall(ctx, fn, m);
 
-                    if (fn.ReturnType.Kind != IrTypeKind.Void)
+                    if (!(fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Void }))
                     {
                         m.Assign(
                             Runtime.ResultVar,
@@ -175,7 +177,7 @@ namespace extgen.Bridge.Java
 
             m.Line();
             m.Call($"{Runtime.WireClass}.order", [Runtime.RetBufferParam]).Line(";");
-            m.Comment($"return: {Runtime.ResultVar}, type: {fn.ReturnType.Name}{(fn.ReturnType.IsCollection ? $"[{fn.ReturnType.FixedLength}]" : string.Empty)}");
+            m.Comment($"return: {Runtime.ResultVar}, type: {fn.ReturnType.ToDebugString()}");
             Wire.EncodeLines(m, fn.ReturnType, Runtime.ResultVar, Runtime.RetBufferParam);
             m.Line();
         }
@@ -192,7 +194,7 @@ namespace extgen.Bridge.Java
 
                 foreach (var p in fn.Parameters)
                 {
-                    m.Comment($"field: {p.Name}, type: {p.Type.Name}{(p.Type.IsCollection ? $"[{p.Type.FixedLength}]" : string.Empty)}");
+                    m.Comment($"field: {p.Name}, type: {p.Type.ToDebugString()}");
                     Wire.DecodeLines(m, p.Type, p.Name, declare: true, bufferVar: Runtime.ArgBufferParam);
                     m.Line();
                     callArgs.Add(p.Name);
@@ -206,11 +208,11 @@ namespace extgen.Bridge.Java
                     var name = p.Name;
 
                     string expr;
-                    if (t.IsNumericScalar)
+                    if (IrTypeUtil.IsNumericScalar(t))
                     {
                         var javaType = Types.Map(t, owned: true);
 
-                        if (t.Name.Equals("bool", StringComparison.InvariantCultureIgnoreCase))
+                        if (IrTypeUtil.IsBool(t))
                         {
                             expr = $"{name} != 0";
                         }
@@ -219,7 +221,7 @@ namespace extgen.Bridge.Java
                             expr = $"({javaType}){name}";
                         }
                     }
-                    else if (t.IsStringScalar)
+                    else if (IrTypeUtil.IsStringScalar(t))
                     {
                         // Bridge type is String, and user type is String too.
                         expr = name;

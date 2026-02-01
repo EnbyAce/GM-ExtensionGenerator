@@ -1,4 +1,5 @@
-﻿using codegencore.Writers;
+﻿using codegencore.Model;
+using codegencore.Writers;
 using codegencore.Writers.Concrete;
 using extgen.Model;
 using extgen.Options;
@@ -7,16 +8,19 @@ using System.Text;
 
 namespace extgen.Emitters.Doc
 {
-    internal class DocEmitter(DocEmitterOptions options, RuntimeNaming runtime) : IIrEmitter
+    internal sealed class DocEmitter(DocEmitterOptions options, RuntimeNaming runtime) : IIrEmitter
     {
+        // currently unused, but keep for future expansion (links/namespace hints etc)
+        private readonly DocEmitterOptions _options = options;
+        private readonly RuntimeNaming _runtime = runtime;
+
         public void Emit(IrCompilation comp, string outputDir)
         {
-            var ext = comp.Name;
-            var layout = new DocLayout(outputDir, options);
-
-            WriteFileDoc(layout.OutputDir, $"documentation.js", w => EmitAll(w, comp));
+            var layout = new DocLayout(outputDir, _options);
+            WriteFileDoc(layout.OutputDir, "documentation.js", w => EmitAll(w, comp));
         }
-        private static void WriteFileDoc(string dir, string name, Action<DocWriter> emit) 
+
+        private static void WriteFileDoc(string dir, string name, Action<DocWriter> emit)
         {
             Directory.CreateDirectory(dir);
             using var tw = new StreamWriter(Path.Combine(dir, name), false, new UTF8Encoding(false));
@@ -27,16 +31,9 @@ namespace extgen.Emitters.Doc
 
         private static void EmitAll(DocWriter w, IrCompilation c)
         {
-            // Functions
             EmitFunctions(w, c.Functions);
-
-            // Structs
             EmitStructs(w, c.Structs);
-
-            // Enums
             EmitEnums(w, c.Enums);
-
-            // Constants
             EmitConstants(w, c.Constants);
         }
 
@@ -47,13 +44,22 @@ namespace extgen.Emitters.Doc
                 w.JsDoc(spec =>
                 {
                     spec.Tag("function_partial", f.Name);
+
                     foreach (var p in f.Parameters)
                     {
-                        spec.Param(new(p.Name, JsDocType(p.Type), null, p.Type.IsNullable));
+                        spec.Param(new(
+                            p.Name,
+                            JsDocType(p.Type),
+                            Description: null,
+                            Optional: IsNullable(p.Type)));
                     }
-                    if (f.ReturnType.Kind != IrTypeKind.Void) spec.Returns(JsDocType(f.ReturnType));
+
+                    if (!IsVoid(f.ReturnType))
+                        spec.Returns(JsDocType(f.ReturnType));
+
                     spec.Tag("function_end");
                 });
+
                 w.Line();
             }
         }
@@ -65,12 +71,19 @@ namespace extgen.Emitters.Doc
                 w.JsDoc(spec =>
                 {
                     spec.Tag("struct_partial", s.Name);
+
                     foreach (var f in s.Fields)
                     {
-                        spec.Member(new(f.Name, JsDocType(f.Type), null, f.Type.IsNullable));
+                        spec.Member(new(
+                            f.Name,
+                            JsDocType(f.Type),
+                            Description: null,
+                            Optional: IsNullable(f.Type)));
                     }
+
                     spec.Tag("struct_end");
                 });
+
                 w.Line();
             }
         }
@@ -81,45 +94,106 @@ namespace extgen.Emitters.Doc
             {
                 w.JsDoc(spec =>
                 {
+                    // You used const_partial/const_end before; keeping same tags.
                     spec.Tag("const_partial", e.Name);
+
                     foreach (var m in e.Members)
                     {
-                        spec.Member(new(m.Name, JsDocType(e.Underlying)));
+                        spec.Member(new(
+                            m.Name,
+                            JsDocType(e.Underlying),
+                            Description: null,
+                            Optional: false));
                     }
+
                     spec.Tag("const_end");
                 });
+
                 w.Line();
             }
         }
 
         private static void EmitConstants(DocWriter w, ImmutableArray<IrConstant> constants)
         {
+            // You had this empty before. Keeping it empty to preserve behavior.
+            // If you want constants in docs, you can add similar JsDoc blocks here.
+            _ = w;
+            _ = constants;
         }
+
+        // ============================================================
+        // IrType helpers (new shape-based IrType)
+        // ============================================================
+
+        private static bool IsVoid(IrType t) =>
+            t is IrType.Builtin { Kind: BuiltinKind.Void };
+
+        private static bool IsNullable(IrType t) =>
+            t is IrType.Nullable;
+
+        private static IrType StripNullable(IrType t) =>
+            t is IrType.Nullable n ? n.Underlying : t;
+
+        // ============================================================
+        // JSDoc type mapping (GameMaker-facing)
+        // ============================================================
 
         public static string JsDocType(IrType t)
         {
-            if (t.IsCollection)
+            // Nullable affects "optional" flag; for the type string we describe the underlying.
+            t = StripNullable(t);
+
+            // Array<T>
+            if (t is IrType.Array a)
             {
-                var inner = t with { IsCollection = false };
-                return $"Array[{JsDocType(inner)}]";
+                return a.FixedLength is int n
+                    ? $"Array[{JsDocType(a.Element)}]/*len:{n}*/"
+                    : $"Array[{JsDocType(a.Element)}]";
             }
 
-            return t.Kind switch
+            // Named types (Struct / Enum)
+            if (t is IrType.Named named)
             {
-                IrTypeKind.Scalar when t.Name == "bool" => "Bool",
-                IrTypeKind.Scalar when t.IsNumericScalar => "Real",
-                IrTypeKind.Scalar when t.IsStringScalar => "String",
-                IrTypeKind.Scalar => "Real",
-                IrTypeKind.AnyArray => "Array",
-                IrTypeKind.AnyMap => "Struct",
-                IrTypeKind.Function => $"Function",
-                IrTypeKind.Buffer => $"Id.Buffer",
-                IrTypeKind.Struct => $"Struct.{t.Name}",
-                IrTypeKind.Enum => $"Enum.{t.Name}",
-                IrTypeKind.Variant => "Any",
-                IrTypeKind.Void => throw new NotImplementedException(),
-                _ => throw new NotImplementedException($"JSDoc conversion not implemented for type: {t}"),
-            };
+                return named.Kind switch
+                {
+                    NamedKind.Struct => $"Struct.{named.Name}",
+                    NamedKind.Enum => $"Enum.{named.Name}",
+                    _ => named.Name
+                };
+            }
+
+            // Builtins
+            if (t is IrType.Builtin b)
+            {
+                return b.Kind switch
+                {
+                    BuiltinKind.Bool => "Bool",
+
+                    // numeric -> Real (GML number)
+                    BuiltinKind.Int8 or BuiltinKind.UInt8
+                    or BuiltinKind.Int16 or BuiltinKind.UInt16
+                    or BuiltinKind.Int32 or BuiltinKind.UInt32
+                    or BuiltinKind.Int64 or BuiltinKind.UInt64
+                    or BuiltinKind.Float32 or BuiltinKind.Float64
+                        => "Real",
+
+                    BuiltinKind.String => "String",
+
+                    BuiltinKind.Any => "Any",
+                    BuiltinKind.AnyArray => "Array",
+                    BuiltinKind.AnyMap => "Struct",
+
+                    BuiltinKind.Function => "Function",
+                    BuiltinKind.Buffer => "Id.Buffer",
+
+                    BuiltinKind.Void => "void",
+
+                    _ => "Any"
+                };
+            }
+
+            // Fallback
+            return "Any";
         }
     }
 }

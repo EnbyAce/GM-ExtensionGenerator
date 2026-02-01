@@ -1,154 +1,121 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Bridge;
-using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Cpp;
 
 namespace extgen.Emitters.Cpp
 {
-    /// <summary>
-    /// C++ wire helper used by desktop, ObjC, Swift bridges.
-    ///
-    /// Policy knobs:
-    ///   - typedEnums: if true, decode enums as their enum type;
-    ///                 if false, decode as underlying integer type (Swift-friendly).
-    ///   - "owned" (per-call): controls Map(t, owned):
-    ///         owned=true  -> std::string / std::vector / etc
-    ///         owned=false -> std::string_view / span / etc (cheap views)
-    ///
-    /// This class is wired to the shared bridge abstraction via
-    /// WireHelpersBase&lt;TWriter&gt;, using TWriter constrained
-    /// to CxxWriter&lt;TWriter&gt;.
-    /// </summary>
     internal sealed class CppWireHelpers<TWriter>(
         RuntimeNaming runtime,
-        CppTypeMap typeMap
+        CppTypeMap typeMap,
+        IIrTypeEnumResolver enums,
+        bool typedEnums = true
     ) : WireHelpersBase<TWriter>
         where TWriter : CxxWriter<TWriter>
     {
+        private readonly RuntimeNaming _runtime = runtime;
+        private readonly CppTypeMap _typeMap = typeMap;
+        private readonly IIrTypeEnumResolver _enums = enums;
+        private readonly bool _typedEnums = typedEnums;
+
         // ============================================================
-        //  Low-level read / write expression helpers (non-collection)
+        //  Low-level read / write expression helpers (non-nullable, non-array)
         // ============================================================
 
-        private string ReadEnumExpr(IrType t, string bufferVar, bool owned, out string returnType)
+        private string ReadNonWrapped(IrType t, string bufferVar, bool owned)
         {
-            var ns = runtime.CodeGenNamespace;
-            
-            returnType = typeMap.Map(t, owned: owned);
+            var ns = _runtime.CodeGenNamespace;
 
-            // ObjC / C++ flavor: cast to the actual enum type.
-            return $"{ns}::readValue<{returnType}>({bufferVar})";
-        }
-
-        private string ReadExprInternal(IrType t, string bufferVar, bool owned)
-        {
-            var ns = runtime.CodeGenNamespace;
-
-            if (t.IsNullable || t.IsCollection)
-                throw new NotSupportedException("ReadExprInternal expects a non-nullable, non-collection type.");
-
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
-                return ReadEnumExpr(t, bufferVar, owned, out string _);
-
-            if (t.Kind == IrTypeKind.Buffer)
+            // Enum
+            if (t is IrType.Named { Kind: NamedKind.Enum, Name: var enumName })
             {
-                // For “raw” expression, just fetch; caller pops if needed.
-                return $"{runtime.BufferQueueField}.front()";
+                if (_typedEnums)
+                {
+                    var cppEnum = _typeMap.Map(t, owned: owned);
+                    return $"{ns}::readValue<{cppEnum}>({bufferVar})";
+                }
+                else
+                {
+                    var u = _enums.GetUnderlying(enumName);
+                    var uCpp = _typeMap.Map(u, owned: false);
+                    return $"{ns}::readValue<{uCpp}>({bufferVar})";
+                }
             }
 
-            if (t.Kind == IrTypeKind.Function)
+            // Buffer (special queue)
+            if (t is IrType.Builtin { Kind: BuiltinKind.Buffer })
             {
-                return $"{ns}::readFunction({bufferVar}, &{runtime.DispatchQueueField})";
+                return $"{_runtime.BufferQueueField}.front()";
             }
 
-            // Plain scalar/struct/any/variant/etc: use unified readValue<T>.
-            var cpp = typeMap.Map(t, owned: owned);
+            // Function (special read helper)
+            if (t is IrType.Builtin { Kind: BuiltinKind.Function })
+            {
+                return $"{ns}::readFunction({bufferVar}, &{_runtime.DispatchQueueField})";
+            }
+
+            // Everything else
+            var cpp = _typeMap.Map(t, owned: owned);
             return $"{ns}::readValue<{cpp}>({bufferVar})";
         }
 
-        private string WriteExprInternal(IrType t, string bufferVar, string valueExpr)
+        private string WriteNonWrapped(IrType t, string bufferVar, string valueExpr)
         {
-            var ns = runtime.CodeGenNamespace;
+            var ns = _runtime.CodeGenNamespace;
 
-            if (t.IsNullable || t.IsCollection)
-                throw new NotSupportedException("WriteExprInternal expects a non-nullable, non-collection type.");
-
-            if (t.Kind == IrTypeKind.Buffer)
-            {
+            if (t is IrType.Builtin { Kind: BuiltinKind.Buffer })
                 throw new NotSupportedException("code emitter: buffers as return values are not supported.");
-            }
 
-            if (t.Kind == IrTypeKind.Function)
-            {
+            if (t is IrType.Builtin { Kind: BuiltinKind.Function })
                 throw new NotSupportedException("code emitter: functions as return values are not supported.");
-            }
 
-            // Plain scalar/struct/any/etc
+            // NOTE: if typedEnums=false and caller passes enum type, you must cast/extract underlying
+            // somewhere else. In practice, typedEnums=false is usually a *decode* policy (Swift).
             return $"{ns}::writeValue({bufferVar}, {valueExpr})";
         }
 
         // ============================================================
-        //  WireHelpersBase overrides
-        //  (default to owned values for the scalar case)
+        //  WireHelpersBase overrides (expression helpers)
         // ============================================================
 
         public override string ReadExpr(IrType t, string bufferVar)
-            => ReadExprInternal(t, bufferVar, owned: true);
+        {
+            if (t is IrType.Nullable or IrType.Array)
+                throw new NotSupportedException("ReadExpr expects a non-nullable, non-array IrType. Use DecodeLines.");
+            return ReadNonWrapped(t, bufferVar, owned: true);
+        }
 
         public override string WriteExpr(IrType t, string bufferVar, string valueExpr)
-            => WriteExprInternal(t, bufferVar, valueExpr);
+        {
+            if (t is IrType.Nullable or IrType.Array)
+                throw new NotSupportedException("WriteExpr expects a non-nullable, non-array IrType. Use EncodeLines.");
+            return WriteNonWrapped(t, bufferVar, valueExpr);
+        }
 
-        /// <summary>
-        /// Default "DecodeLines" used by generic bridge code:
-        /// decodes as owned types (std::string, std::vector, etc).
-        /// </summary>
-        public override void DecodeLines(
-            TWriter w,
-            IrType t,
-            string accessor,
-            bool declare,
-            string bufferVar)
+        public override void DecodeLines(TWriter w, IrType t, string accessor, bool declare, string bufferVar)
             => DecodeLines(w, t, accessor, declare, bufferVar, owned: true);
 
-        /// <summary>
-        /// EncodeLines is fully specified by type + accessor.
-        /// No ownership policy needed on the encode side.
-        /// </summary>
-        public override void EncodeLines(
-            TWriter w,
-            IrType t,
-            string accessor,
-            string bufferVar)
+        public override void EncodeLines(TWriter w, IrType t, string accessor, string bufferVar)
         {
-            var ns = runtime.CodeGenNamespace;
+            var ns = _runtime.CodeGenNamespace;
 
-            // Nullable -> presence bool + payload if present
-            if (t.IsNullable)
-            {
-                w.Call($"{ns}::writeValue", bufferVar, accessor).Line(";");
-                return;
-            }
+            // Policy: don’t allow Buffer/Function nested under wrappers if you consider them illegal.
+            if (ContainsBuiltin(t, BuiltinKind.Buffer))
+                throw new NotSupportedException("code emitter: buffers in return values are not supported.");
 
-            // Collections
-            if (t.IsCollection)
-            {
-                w.Call($"{ns}::writeValue", bufferVar, accessor).Line(";");
-                return;
-            }
+            if (ContainsBuiltin(t, BuiltinKind.Function))
+                throw new NotSupportedException("code emitter: functions in return values are not supported.");
 
-            // Everything else: delegate to scalar/enum helper
-            w.Line(WriteExprInternal(t, bufferVar, accessor) + ";");
+            // Your runtime already supports writeValue for optional/vector/array etc.
+            w.Call($"{ns}::writeValue", bufferVar, accessor).Line(";");
         }
 
         // ============================================================
-        //  High-level DecodeLines with ownership control
+        //  DecodeLines with ownership control
         // ============================================================
 
-        /// <summary>
-        /// Decode a value of IrType t from the buffer into "accessor".
-        /// "owned" controls whether we map t to owned storage (std::string)
-        /// or view types (std::string_view), via CppTypeMap.Map(t, owned).
-        /// </summary>
         public void DecodeLines(
             TWriter w,
             IrType t,
@@ -157,72 +124,96 @@ namespace extgen.Emitters.Cpp
             string bufferVar,
             bool owned)
         {
-            var ns = runtime.CodeGenNamespace;
-
-            // This is the “intended” C++ type for the IR type.
-            string? typeForDecl = declare ? typeMap.Map(t, owned: owned) : null;
+            var ns = _runtime.CodeGenNamespace;
+            string? declType = declare ? _typeMap.Map(t, owned: owned) : null;
 
             // Nullable -> std::optional<T>
-            if (t.IsNullable)
+            if (t is IrType.Nullable n)
             {
-                var inner = t with { IsNullable = false };
-                if (t.Kind == IrTypeKind.Function)
+                var inner = n.Underlying;
+
+                // If you have a special-case optional layout for function, keep it.
+                // Otherwise just readOptional<T>.
+                if (ContainsBuiltin(inner, BuiltinKind.Function))
                 {
                     if (declare)
+                        w.Declare(declType!, accessor, "std::nullopt", initStyle: InitStyle.Equals);
+
+                    w.If($"{ns}::readValue<bool>({bufferVar})", thenBody =>
                     {
-                        w.Declare(typeForDecl!, accessor, "std::nullopt", initStyle: InitStyle.Equals);
-                        w.If($"{ns}::readValue<bool>({bufferVar})", thenBody => 
-                        {
-                            DecodeLines(w, inner, accessor, false, bufferVar, owned);
-                        });
-                    }
+                        DecodeLines(thenBody, inner, accessor, declare: false, bufferVar, owned);
+                    });
+
+                    return;
+                }
+
+                w.Assign(
+                    accessor,
+                    $"{ns}::readOptional<{_typeMap.Map(inner, owned: owned)}>({bufferVar})",
+                    declType);
+
+                return;
+            }
+
+            // Array -> std::array / std::vector
+            if (t is IrType.Array a)
+            {
+                var el = a.Element;
+                var elCpp = _typeMap.Map(el, owned: true);
+
+                if (a.FixedLength is int nFixed)
+                {
+                    w.Assign(
+                        accessor,
+                        $"{ns}::readArray<{elCpp}, {nFixed}>({bufferVar})",
+                        declType);
                 }
                 else
                 {
-                    w.Assign(accessor, $"{ns}::readOptional<{typeMap.Map(inner, owned: owned)}>({bufferVar})", typeForDecl);
+                    w.Assign(
+                        accessor,
+                        $"{ns}::readVector<{elCpp}>({bufferVar})",
+                        declType);
                 }
+
                 return;
             }
 
-            // Collections
-            if (t.IsCollection)
+            // Buffer: consume queue
+            if (t is IrType.Builtin { Kind: BuiltinKind.Buffer })
             {
-                var el = IrHelpers.Element(t);
-                var elType = typeMap.Map(el, owned: true); // elements usually owned in container
+                w.Assign(accessor, ReadNonWrapped(t, bufferVar, owned), declType);
+                w.Line($"{_runtime.BufferQueueField}.pop();");
+                return;
+            }
 
-                if (t.FixedLength is int n)
+            // Enum
+            if (t is IrType.Named { Kind: NamedKind.Enum, Name: var enumName })
+            {
+                if (_typedEnums)
                 {
-                    w.Assign(accessor, $"{ns}::readArray<{elType}, {n}>({bufferVar})", typeForDecl);
+                    w.Assign(accessor, ReadNonWrapped(t, bufferVar, owned), declType);
                 }
                 else
                 {
-                    w.Assign(accessor, $"{ns}::readVector<{elType}>({bufferVar})", typeForDecl);
+                    var u = _enums.GetUnderlying(enumName);
+                    var uCpp = _typeMap.Map(u, owned: false);
+                    w.Assign(accessor, $"{ns}::readValue<{uCpp}>({bufferVar})", declare ? uCpp : null);
                 }
                 return;
             }
 
-            // Buffer: consume from queue
-            if (t.Kind == IrTypeKind.Buffer)
-            {
-                // Here we *know* we want the queue type, not the wire type.
-                var expr = ReadExprInternal(t, bufferVar, owned);
-                w.Assign(accessor, expr, typeForDecl);
-                w.Line($"{runtime.BufferQueueField}.pop();");
-                return;
-            }
-
-            // Enum (where Swift vs C++ differ in the *declared* type)
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
-            {
-                var readExpr = ReadEnumExpr(t, bufferVar, owned, out string returnType);
-                w.Assign(accessor, readExpr, declare ? returnType : null);
-
-                return;
-            }
-
-            // Plain scalar / struct / any / function
-            var valueExpr = ReadExprInternal(t, bufferVar, owned);
-            w.Assign(accessor, valueExpr, typeForDecl);
+            // Default
+            w.Assign(accessor, ReadNonWrapped(t, bufferVar, owned), declType);
         }
+
+        private static bool ContainsBuiltin(IrType t, BuiltinKind kind) =>
+            t switch
+            {
+                IrType.Builtin b => b.Kind == kind,
+                IrType.Nullable n => ContainsBuiltin(n.Underlying, kind),
+                IrType.Array a => ContainsBuiltin(a.Element, kind),
+                _ => false
+            };
     }
 }

@@ -1,77 +1,94 @@
-﻿using extgen.Model;
-using extgen.Options;
+﻿using codegencore.Model;
 
 namespace extgen.TypeSystem.Swift
 {
-    internal sealed class SwiftTypeMap(RuntimeNaming Runtime) : IIrTypeMap
+    internal sealed class SwiftTypeMap : IIrTypeMap
     {
         public string Map(IrType t, bool owned = false)
         {
-            // 1) Base "core" type, without collection / nullability
-            string core = t.Kind switch
-            {
-                IrTypeKind.Void => "Void",
-                IrTypeKind.Enum => MapEnum(t),
-                IrTypeKind.Struct => MapStruct(t),
-                IrTypeKind.Scalar => MapScalar(t, owned),
-                IrTypeKind.Any => "GMValue",
-                IrTypeKind.AnyArray => "[GMValue]",
-                IrTypeKind.AnyMap => "[(String, GMValue)]",
-                IrTypeKind.Buffer => !owned ? MapBuffer(t) : throw new NotSupportedException("code emitter: buffer as return is not supported."),
-                IrTypeKind.Function => "GMFunction",
-                IrTypeKind.Variant => throw new NotSupportedException($"code emitter: variants ({t.Name}) are not supported yet."),
+            // 1) Nullable wrapper applies last
+            var isNullable = IrType.IsNullable(t);
+            t = IrType.StripNullable(t);
 
-                _ => t.Name
-            };
+            // 2) Map non-nullable
+            var core = MapNonNullable(t, owned);
 
-            // 2) Collections
-            if (t.IsCollection)
-            {
-                var elem = IrHelpers.Element(t);
-                var elemType = Map(elem);
-                core = MapCollection(t, elemType);
-            }
-
-            // 3) Nullable
-            if (t.IsNullable)
-            {
-                core = $"{core}?";
-            }
+            // 3) Swift optional
+            if (isNullable)
+                core += "?";
 
             return core;
         }
 
-        public string MapBuffer(IrType t) => $"GMBuffer";
-
-        public string MapCollection(IrType t, string elementType) => $"[{elementType}]";
-        
-        public string MapEnum(IrType t) => $"{t.Name}";
-
-        public string MapScalar(IrType t, bool owned = false) => t.Name switch
+        private string MapNonNullable(IrType t, bool owned)
         {
-            "bool" => "Bool",
-            "int8" => "Int8",
-            "int16" => "Int16",
-            "int32" => "Int32",
-            "int64" => "Int64",
-            "uint8" => "UInt8",
-            "uint16" => "UInt16",
-            "uint32" => "UInt32",
-            "uint64" => "UInt64",
-            "float" => "Float",
-            "double" => "Double",
-            "string" => MapString(t, owned),
-            _ => throw new NotSupportedException($"code emitter: scalar type ({t.Name}) is not supported.")
-        };
+            return t switch
+            {
+                IrType.Array a => MapArray(a, owned),
 
-        public string MapString(IrType t, bool owned = false) => "String";
+                IrType.Named n => n.Kind switch
+                {
+                    NamedKind.Enum => MapEnum(n),
+                    NamedKind.Struct => MapStruct(n),
+                    _ => n.Name
+                },
 
-        public string MapStruct(IrType t) => $"{t.Name}";
+                IrType.Builtin b => MapBuiltin(b, owned),
 
-        public string MapPassType(IrType t, bool owned = false)
-        {
-            var baseName = Map(t, owned);
-            return baseName;
+                _ => "Any"
+            };
         }
+
+        private string MapArray(IrType.Array a, bool owned)
+        {
+            // Swift: always [T]
+            // Element mapping is recursive (so optional elements become T?)
+            var elem = Map(a.Element, owned);
+            return $"[{elem}]";
+        }
+
+        private string MapBuiltin(IrType.Builtin b, bool owned)
+        {
+            return b.Kind switch
+            {
+                BuiltinKind.Void => "Void",
+
+                BuiltinKind.Bool => "Bool",
+
+                BuiltinKind.Int8 => "Int8",
+                BuiltinKind.Int16 => "Int16",
+                BuiltinKind.Int32 => "Int32",
+                BuiltinKind.Int64 => "Int64",
+
+                BuiltinKind.UInt8 => "UInt8",
+                BuiltinKind.UInt16 => "UInt16",
+                BuiltinKind.UInt32 => "UInt32",
+                BuiltinKind.UInt64 => "UInt64",
+
+                BuiltinKind.Float32 => "Float",
+                BuiltinKind.Float64 => "Double",
+
+                BuiltinKind.String => "String",
+
+                BuiltinKind.Any => "GMValue",
+                BuiltinKind.AnyArray => "[GMValue]",
+                BuiltinKind.AnyMap => "[(String, GMValue)]",
+
+                // Preserve your previous rule: buffer cannot be returned/owned
+                BuiltinKind.Buffer => owned
+                    ? throw new NotSupportedException("code emitter: buffer as return is not supported.")
+                    : "GMBuffer",
+
+                BuiltinKind.Function => "GMFunction",
+
+                _ => "Any"
+            };
+        }
+
+        private static string MapEnum(IrType.Named n) => n.Name;
+
+        private static string MapStruct(IrType.Named n) => n.Name;
+
+        public string MapPassType(IrType t, bool owned = false) => Map(t, owned);
     }
 }

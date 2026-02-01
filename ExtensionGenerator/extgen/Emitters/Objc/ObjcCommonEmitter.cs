@@ -1,11 +1,11 @@
-﻿using codegencore.Writers.Concrete;
+﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
+using extgen.Emitters.Swift;
 using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.TypeSystem;
 using extgen.Utils;
-using System.Text;
 
 namespace extgen.Emitters.Objc
 {
@@ -48,8 +48,8 @@ namespace extgen.Emitters.Objc
             // Bridge-specific header extras (ObjC protocol, etc)
             bridge.EmitExtraHeaderDeclarations(ctx, c, w, cppTypeMap);
 
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             // 1. internal code gen signatures
             w.Interface($"{ext}Internal", body: body =>
@@ -115,8 +115,8 @@ namespace extgen.Emitters.Objc
                     .Line();
                 }
 
-                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
                 if (usesFunctions)
                 {

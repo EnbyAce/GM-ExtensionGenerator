@@ -1,7 +1,9 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Emitters.Cpp;
 using extgen.Emitters.Objc;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem;
 using extgen.TypeSystem.Cpp;
@@ -14,14 +16,14 @@ namespace extgen.Bridge.Objc
     ///   - implementation is (id&lt;ExtInterface&gt;)self
     ///   - calls __impl via ObjC message send.
     /// </summary>
-    internal sealed class ObjcBridge : IAppleBridge
+    internal sealed class ObjcBridge(IIrTypeEnumResolver enums) : IAppleBridge
     {
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
         {
             var ext = ctx.ExtName;
             var impl = ctx.Runtime.ImplField;
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             if (usesFunctions)
                 w.IVar($"{ctx.Runtime.RuntimeNamespace}::DispatchQueue", ctx.Runtime.DispatchQueueField);
@@ -45,7 +47,7 @@ namespace extgen.Bridge.Objc
             var cppTypeMap = new CppTypeMap(ctx.Runtime);
 
             CppEmitterContext cppCtx = new(ctx.ExtName, new CppEmitterOptions(), ctx.Runtime);
-            CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, cppTypeMap);
+            CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, cppTypeMap, enums);
 
             // 1) decode (reused helper)
             var needsArgBuffer = IrAnalysis.NeedsArgsBuffer(fn);
@@ -56,12 +58,12 @@ namespace extgen.Bridge.Objc
             var impl = ctx.Runtime.ImplField;
             var returnType = fn.ReturnType;
 
-            if (returnType.Kind != IrTypeKind.Void)
+            if (!(returnType is IrType.Builtin { Kind: BuiltinKind.Void }))
             {
                 var cppRet = cppTypeMap.Map(fn.ReturnType, owned: true);
                 var resultVar = ctx.Runtime.ResultVar;
 
-                if (returnType.IsStringScalar)
+                if (returnType is IrType.Builtin { Kind: BuiltinKind.String })
                 {
                     fnBody.Line($"static std::string {resultVar};");
                     fnBody.Assign(resultVar, e => e.MsgSend(impl, fn.Name, callArgsLabels.ToList()));
@@ -89,7 +91,7 @@ namespace extgen.Bridge.Objc
             w.Include("GMExtWire.h", false).Line();
 
             CppEmitterContext cppCtx = new(ctx.ExtName, new CppEmitterOptions(), ctx.Runtime);
-            CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, new CppTypeMap(ctx.Runtime));
+            CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, new CppTypeMap(ctx.Runtime), enums);
             commmon.EmitCommonCppArtifacts(w, c);
         }
 

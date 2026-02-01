@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using codegencore.Model;
+using System.Collections.Immutable;
 
 namespace extgen.Model
 {

@@ -1,86 +1,99 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
 
 namespace extgen.TypeSystem.Kotlin
 {
     /// <summary>
     /// Maps IrType -> Kotlin types for the public surface (interfaces, etc.).
+    /// owned is mostly irrelevant for Kotlin surface (strings are always String, ByteArray is value),
+    /// but kept for interface parity.
     /// </summary>
     public sealed class KotlinTypeMap : IIrTypeMap
     {
         public string Map(IrType t, bool owned = false)
         {
-            // 1) Base "core" type, without collection / nullability
-            string core = t.Kind switch
-            {
-                IrTypeKind.Void => "Unit",      // only meaningful as return
-                IrTypeKind.Enum => MapEnum(t),
-                IrTypeKind.Struct => MapStruct(t),
-                IrTypeKind.Scalar => MapScalar(t, owned),
-                IrTypeKind.Any => "GMValue",
-                IrTypeKind.AnyArray => "List<GMValue>",
-                IrTypeKind.AnyMap => "Map<String, GMValue>",
-                IrTypeKind.Function => "GMFunction",
-                IrTypeKind.Buffer => MapBuffer(t),
+            var isNullable = IrType.IsNullable(t);
+            t = IrType.StripNullable(t);
 
-                _ => "Any"
-            };
+            var core = MapNonNullable(t, owned);
 
-            // 2) Collections
-            if (t.IsCollection)
-            {
-                var elem = IrHelpers.Element(t);
-                var elemType = Map(elem);
-                core = MapCollection(t, elemType);
-            }
-
-            // 3) Nullable
-            if (t.IsNullable)
-            {
+            // Kotlin nullable marker
+            if (isNullable)
                 core += "?";
-            }
 
             return core;
         }
 
-        public string MapScalar(IrType t, bool owned = false) => t.Name switch
+        private string MapNonNullable(IrType t, bool owned)
         {
-            "bool" => "Boolean",
-            "int8" => "Byte",
-            "int16" => "Short",
-            "int32" => "Int",
-            "int64" => "Long",
-            "uint8" => "Byte",   // Kotlin/JVM has UInt but on JVM it's still boxed
-            "uint16" => "Int",
-            "uint32" => "Long",
-            "uint64" => "Long",
-            "float" => "Float",
-            "double" => "Double",
-            "string" => MapString(t, owned),
+            return t switch
+            {
+                IrType.Array a => MapArray(a, owned),
 
-            _ => "Double"
-        };
+                IrType.Named n => n.Kind switch
+                {
+                    NamedKind.Enum => MapEnum(n),
+                    NamedKind.Struct => MapStruct(n),
+                    _ => n.Name
+                },
 
-        public string MapEnum(IrType t) => t.Name;
-        public string MapStruct(IrType t) => t.Name;
-        public string MapString(IrType t, bool owned = false) => "String";
+                IrType.Builtin b => MapBuiltin(b, owned),
 
-        /// <summary>
-        /// We choose ByteArray for Kotlin surface to keep it idiomatic.
-        /// The Java bridge still uses ByteBuffer internally.
-        /// </summary>
-        public string MapBuffer(IrType t) => "ByteArray";
-
-        public string MapCollection(IrType t, string elementType)
-        {
-            // fixed-length: Array<T>   else: List<T>
-            return t.FixedLength is int
-                ? $"Array<{elementType}>"
-                : $"List<{elementType}>";
+                _ => "Any"
+            };
         }
 
-        public string MapPassType(IrType type, bool owned = false)
+        private string MapArray(IrType.Array a, bool owned)
         {
-            return Map(type, owned);
+            // Kotlin surface:
+            // - fixed length => Array<T>
+            // - variable => List<T>
+            //
+            // Element mapping: use Map(...) recursively so nullable elements become T?
+            var elem = Map(a.Element, owned);
+
+            return a.FixedLength is int
+                ? $"Array<{elem}>"
+                : $"List<{elem}>";
         }
+
+        private string MapBuiltin(IrType.Builtin b, bool owned)
+        {
+            return b.Kind switch
+            {
+                BuiltinKind.Void => "Unit",
+
+                BuiltinKind.Bool => "Boolean",
+
+                BuiltinKind.Int8 or BuiltinKind.UInt8 => "Byte",
+                BuiltinKind.Int16 or BuiltinKind.UInt16 => "Short",
+
+                // Kotlin has UInt/ULong but on JVM they’re inline classes; your old behavior used signed.
+                // Keep it pragmatic and stable:
+                BuiltinKind.Int32 or BuiltinKind.UInt32 => "Int",
+                BuiltinKind.Int64 or BuiltinKind.UInt64 => "Long",
+
+                BuiltinKind.Float32 => "Float",
+                BuiltinKind.Float64 => "Double",
+
+                BuiltinKind.String => "String",
+
+                BuiltinKind.Any => "GMValue",
+                BuiltinKind.AnyArray => "List<GMValue>",
+                BuiltinKind.AnyMap => "Map<String, GMValue>",
+
+                BuiltinKind.Function => "GMFunction",
+
+                // Kotlin surface should be idiomatic
+                BuiltinKind.Buffer => "ByteArray",
+
+                _ => "Any"
+            };
+        }
+
+        private static string MapEnum(IrType.Named n) => n.Name;
+
+        private static string MapStruct(IrType.Named n) => n.Name;
+
+        public string MapPassType(IrType type, bool owned = false) => Map(type, owned);
     }
 }

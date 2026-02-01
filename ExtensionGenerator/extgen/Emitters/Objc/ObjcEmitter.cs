@@ -1,5 +1,7 @@
 ﻿using extgen.Bridge.Objc;
+using extgen.Emitters.Java;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Objc;
 
@@ -19,7 +21,8 @@ namespace extgen.Emitters.Objc
 
         private void EmitAll(ObjcEmitterContext ctx, IrCompilation c, ObjcLayout layout)
         {
-            ObjcBridge bridge = new();
+            var enums = new IrTypeEnumResolver(c.Enums);
+            ObjcBridge bridge = new(enums);
 
             ObjcCommonEmitter common = new(ctx, typeMap, bridge);
             common.EmitInternal(c, layout);

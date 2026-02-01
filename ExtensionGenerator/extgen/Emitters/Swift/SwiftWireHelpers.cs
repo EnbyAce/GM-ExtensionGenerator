@@ -1,107 +1,122 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Bridge;
-using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Swift;
 
 namespace extgen.Emitters.Swift
 {
-    internal sealed class SwiftWireHelpers(RuntimeNaming runtime, SwiftTypeMap typeMap) : WireHelpersBase<SwiftWriter>
+    internal sealed class SwiftWireHelpers : WireHelpersBase<SwiftWriter>
     {
+        private readonly RuntimeNaming _runtime;
+        private readonly SwiftTypeMap _typeMap;
+        private readonly IIrTypeEnumResolver _enums;
+
+        public SwiftWireHelpers(RuntimeNaming runtime, SwiftTypeMap typeMap, IIrTypeEnumResolver enums)
+        {
+            _runtime = runtime;
+            _typeMap = typeMap;
+            _enums = enums;
+        }
+
         // ----------------------------------------------------
-        // 1) Low-level read / write expressions (non-collection)
+        // 1) Low-level read / write expressions (atomic only)
         // ----------------------------------------------------
 
-        private string ReadEnumExpr(IrType t, string readerVar, out string swiftEnumType)
+        private IrType GetEnumUnderlyingOrThrow(string enumName)
         {
-            // Swift enum type name (without namespace, per your SwiftTypeMap)
-            swiftEnumType = typeMap.MapEnum(t);
+            if (!_enums.TryGetUnderlying(enumName, out var underlying))
+                throw new NotSupportedException($"Enum underlying type not found for '{enumName}'.");
+            return IrType.StripNullable(underlying);
+        }
+
+        private string ReadEnumExpr(string enumName, string readerVar)
+        {
+            // Swift enum type name (per your SwiftTypeMap: typically just the name)
+            var swiftEnumType = enumName;
 
             // Underlying scalar type – e.g. Int32, UInt8...
-            var underlying = t.Underlying ?? throw new InvalidOperationException(
-                $"Enum {t.Name} has no underlying scalar type.");
-            var rawType = typeMap.MapScalar(underlying, owned: false);
+            var underlying = GetEnumUnderlyingOrThrow(enumName);
+
+            // We expect enum underlying to be a builtin scalar (int/uint/bool).
+            // If you allow string enums, you must handle BuiltinKind.String here too.
+            var rawSwiftType = _typeMap.Map(underlying, owned: true);
 
             // Read raw scalar, then wrap into enum with rawValue:
-            //   let raw = try r.readRaw(Int32.self)
-            //   return MyEnum(rawValue: raw)!
-            // Here we just return the expression using a local name.
-            var rawLocal = $"__raw_{t.Name}";
-            // This helper is used in DecodeLines; it will declare the local if needed.
-            return $"({swiftEnumType}(rawValue: try {readerVar}.readRaw({rawType}.self))!)";
+            //   MyEnum(rawValue: try r.readRaw(Int32.self))!
+            return $"({swiftEnumType}(rawValue: try {readerVar}.readRaw({rawSwiftType}.self))!)";
         }
 
         private string ReadExprInternal(IrType t, string readerVar)
         {
-            if (t.IsNullable || t.IsCollection)
+            // Atomic read only: DecodeLines handles Nullable/Array and AnyArray/AnyMap guards.
+            if (IrType.IsNullable(t) || t is IrType.Array)
                 throw new NotSupportedException("ReadExprInternal expects a non-nullable, non-collection type.");
 
-            // Enums: read underlying + wrap
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
-                return ReadEnumExpr(t, readerVar, out _);
+            return t switch
+            {
+                // Enums: read underlying + wrap
+                IrType.Named { Kind: NamedKind.Enum, Name: var en } => ReadEnumExpr(en, readerVar),
 
-            // Any: raw GMValue
-            if (t.Kind == IrTypeKind.Any)
-                return $"try {readerVar}.readGMValue()";
+                // Any: GMValue expression is OK (single statement)
+                IrType.Builtin { Kind: BuiltinKind.Any } => $"try {readerVar}.readGMValue()",
 
-            // AnyArray / AnyMap are handled in DecodeLines with multiple statements.
-            if (t.Kind == IrTypeKind.AnyArray || t.Kind == IrTypeKind.AnyMap)
-                throw new NotSupportedException("ReadExprInternal does not handle AnyArray/AnyMap; use DecodeLines.");
+                // AnyArray/AnyMap: require guard extraction (multi-line)
+                IrType.Builtin { Kind: BuiltinKind.AnyArray } =>
+                    throw new NotSupportedException("ReadExprInternal does not handle AnyArray; use DecodeLines."),
+                IrType.Builtin { Kind: BuiltinKind.AnyMap } =>
+                    throw new NotSupportedException("ReadExprInternal does not handle AnyMap; use DecodeLines."),
 
-            // Buffer / Function
-            if (t.Kind == IrTypeKind.Buffer)
-                return $"{runtime.BufferQueueField}.removeFirst()";
+                // Buffer / Function
+                IrType.Builtin { Kind: BuiltinKind.Buffer } => $"{_runtime.BufferQueueField}.removeFirst()",
+                IrType.Builtin { Kind: BuiltinKind.Function } => $"try {readerVar}.readGMFunction({_runtime.DispatchQueueField})",
 
-            if (t.Kind == IrTypeKind.Function)
-                return $"try {readerVar}.readGMFunction({runtime.DispatchQueueField})";
-
-            // Plain scalar / struct / ITypedStruct / etc
-            var swiftType = typeMap.Map(t, owned: true);
-            return $"try {readerVar}.readRaw({swiftType}.self)";
+                // Structs + builtins scalars: readRaw<T>()
+                _ =>
+                    $"try {readerVar}.readRaw({_typeMap.Map(t, owned: true)}.self)"
+            };
         }
 
         private string WriteExprInternal(IrType t, string writerVar, string valueExpr)
         {
-            // Non-nullable, non-collection.
-            if (t.IsNullable || t.IsCollection)
+            // Atomic write only: EncodeLines handles Nullable/Array.
+            if (IrType.IsNullable(t) || t is IrType.Array)
                 throw new NotSupportedException("WriteExprInternal expects a non-nullable, non-collection type.");
 
-            // Enums: encode their rawValue (scalar)
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
+            return t switch
             {
-                return $"try {writerVar}.writeRaw({valueExpr}.rawValue)";
-            }
+                // Enums: encode rawValue
+                IrType.Named { Kind: NamedKind.Enum } =>
+                    $"try {writerVar}.writeRaw({valueExpr}.rawValue)",
 
-            // Any / AnyArray / AnyMap -> GMValue world
-            if (t.Kind == IrTypeKind.Any ||
-                t.Kind == IrTypeKind.AnyArray ||
-                t.Kind == IrTypeKind.AnyMap)
-            {
-                return $"try {writerVar}.writeGMValue({valueExpr})";
-            }
+                // Any / AnyArray / AnyMap -> GMValue world
+                IrType.Builtin { Kind: BuiltinKind.Any } =>
+                    $"try {writerVar}.writeGMValue({valueExpr})",
+                IrType.Builtin { Kind: BuiltinKind.AnyArray } =>
+                    $"try {writerVar}.writeGMValue({valueExpr})",
+                IrType.Builtin { Kind: BuiltinKind.AnyMap } =>
+                    $"try {writerVar}.writeGMValue({valueExpr})",
 
-            if (t.Kind == IrTypeKind.Buffer)
-                throw new NotSupportedException("Swift wire: Buffer fields not yet supported in struct codecs.");
-            if (t.Kind == IrTypeKind.Function)
-                throw new NotSupportedException("Swift wire: Function fields not yet supported in struct codecs.");
+                // Buffer / Function currently not supported in struct codecs (your existing policy)
+                IrType.Builtin { Kind: BuiltinKind.Buffer } =>
+                    throw new NotSupportedException("Swift wire: Buffer fields not yet supported in struct codecs."),
+                IrType.Builtin { Kind: BuiltinKind.Function } =>
+                    throw new NotSupportedException("Swift wire: Function fields not yet supported in struct codecs."),
 
-            // Everything else: raw codec
-            return $"try {writerVar}.writeRaw({valueExpr})";
+                // Everything else: raw codec
+                _ => $"try {writerVar}.writeRaw({valueExpr})"
+            };
         }
 
         // ----------------------------------------------------
-        // 2) High-level Decode / Encode lines
+        // 2) WireHelpersBase API
         // ----------------------------------------------------
 
-        public override string ReadExpr(IrType t, string bufferVar)
-        {
-            return ReadExprInternal(t, bufferVar);
-        }
+        public override string ReadExpr(IrType t, string bufferVar) => ReadExprInternal(t, bufferVar);
 
-        public override string WriteExpr(IrType t, string bufferVar, string valueExpr)
-        {
-            return WriteExprInternal(t, bufferVar, valueExpr);
-        }
+        public override string WriteExpr(IrType t, string bufferVar, string valueExpr) =>
+            WriteExprInternal(t, bufferVar, valueExpr);
 
         public override void DecodeLines(SwiftWriter w, IrType t, string accessor, bool declare, string bufferVar) =>
             DecodeLines(w, t, accessor, declare, bufferVar, owned: true);
@@ -109,16 +124,18 @@ namespace extgen.Emitters.Swift
         public override void EncodeLines(SwiftWriter w, IrType t, string accessor, string bufferVar)
         {
             // Nullable: writeRaw handles Optional<T> layout (presence + payload).
-            if (t.IsNullable)
+            if (IrType.IsNullable(t))
             {
                 w.Line($"try {bufferVar}.writeRaw({accessor})");
                 return;
             }
 
-            // Collections
-            if (t.IsCollection)
+            t = IrType.StripNullable(t);
+
+            // Arrays
+            if (t is IrType.Array a)
             {
-                if (t.FixedLength is int)
+                if (a.FixedLength is int)
                 {
                     // No length prefix; just contiguous elements
                     w.Line($"try {bufferVar}.writeRawFixedArray({accessor})");
@@ -128,23 +145,20 @@ namespace extgen.Emitters.Swift
                     // Int32 length + elements
                     w.Line($"try {bufferVar}.writeRawList({accessor})");
                 }
-
                 return;
             }
 
-            // Non-nullable, non-collection: defer to scalar helper
-            var stmt = WriteExprInternal(t, bufferVar, accessor);
-            w.Line(stmt);
+            // Atomic
+            w.Line(WriteExprInternal(t, bufferVar, accessor));
         }
 
         // ============================================================
-        //  High-level DecodeLines with ownership control
+        // High-level DecodeLines (supports Nullable/Array/AnyArray/AnyMap)
         // ============================================================
 
         public void DecodeLines(SwiftWriter w, IrType t, string accessor, bool declare, string bufferVar, bool owned)
         {
-            // Swift type name to use in a let/var if declare=true
-            string? swiftTypeForDecl = declare ? typeMap.Map(t, owned: owned) : null;
+            string? swiftTypeForDecl = declare ? _typeMap.Map(t, owned: owned) : null;
 
             void EmitAssign(string rhs)
             {
@@ -154,15 +168,14 @@ namespace extgen.Emitters.Swift
                     w.Assign(accessor, rhs);
             }
 
-            // Nullable → Optional<T>
-            if (t.IsNullable)
+            // Nullable -> Optional<T>
+            if (IrType.IsNullable(t))
             {
-                var inner = t with { IsNullable = false };
+                var inner = IrType.StripNullable(t);
 
-                // For Any-like types we can't use readRawOptional<T>, because T isn't supported by readRaw.
-                if (inner.Kind == IrTypeKind.Any)
+                // Any cannot be read via readRawOptional<T> in your design
+                if (inner is IrType.Builtin { Kind: BuiltinKind.Any })
                 {
-                    // layout: Bool hasValue + GMValue if present
                     w.If($"try {bufferVar}.readRaw(Bool.self)", thenBody =>
                     {
                         thenBody.Assign(accessor, $"try {bufferVar}.readGMValue()");
@@ -173,30 +186,29 @@ namespace extgen.Emitters.Swift
                     return;
                 }
 
-                // Everything else: use readRawOptional<T>()
-                var innerSwiftType = typeMap.Map(inner, owned: owned);
-                var expr = $"try {bufferVar}.readRawOptional({innerSwiftType}.self)";
-                EmitAssign(expr);
+                // Default: use readRawOptional<T>
+                var innerSwiftType = _typeMap.Map(inner, owned: owned);
+                EmitAssign($"try {bufferVar}.readRawOptional({innerSwiftType}.self)");
                 return;
             }
 
-            // Collections
-            if (t.IsCollection)
-            {
-                var el = IrHelpers.Element(t);
-                var elSwift = typeMap.Map(el, owned: true);
+            t = IrType.StripNullable(t);
 
-                // Fixed-length: no length prefix on wire
-                if (t.FixedLength is int n)
+            // Arrays
+            if (t is IrType.Array a)
+            {
+                var el = a.Element;
+                var elSwift = _typeMap.Map(el, owned: true);
+
+                if (a.FixedLength is int n)
                 {
-                    var expr = $"try {bufferVar}.readRawVector({elSwift}.self, count: {n})";
-                    EmitAssign(expr);
+                    // Fixed-length: no length prefix on wire
+                    EmitAssign($"try {bufferVar}.readRawVector({elSwift}.self, count: {n})");
                 }
                 else
                 {
                     // Variable-length: Int32 length + elements
-                    var expr = $"try {bufferVar}.readRaw([{elSwift}].self)";
-                    EmitAssign(expr);
+                    EmitAssign($"try {bufferVar}.readRaw([{elSwift}].self)");
                 }
 
                 return;
@@ -204,14 +216,15 @@ namespace extgen.Emitters.Swift
 
             // Non-nullable, non-collection
 
-            if (t.Kind == IrTypeKind.Any)
+            // Any: GMValue
+            if (t is IrType.Builtin { Kind: BuiltinKind.Any })
             {
-                var expr = $"try {bufferVar}.readGMValue()";
-                EmitAssign(expr);
+                EmitAssign($"try {bufferVar}.readGMValue()");
                 return;
             }
 
-            if (t.Kind == IrTypeKind.AnyArray)
+            // AnyArray: read GMValue, require .array
+            if (t is IrType.Builtin { Kind: BuiltinKind.AnyArray })
             {
                 w.Guard($"case .array(let arr) = try {bufferVar}.readGMValue()", guardBody =>
                 {
@@ -222,24 +235,22 @@ namespace extgen.Emitters.Swift
                 return;
             }
 
-            if (t.Kind == IrTypeKind.AnyMap)
+            // AnyMap: read GMValue, require .object, then convert to [(String, GMValue)]
+            if (t is IrType.Builtin { Kind: BuiltinKind.AnyMap })
             {
-                // guard case .object(let obj) = try r.readGMValue() else { throw ... }
                 w.Guard($"case .object(let obj) = try {bufferVar}.readGMValue()", guardBody =>
                 {
                     guardBody.Line("throw GMError.typeMismatch(\"expected GMValue.object\")");
                 });
 
-                var mapExpr = "obj.map { ($0.key, $0.value) }";
-                EmitAssign(mapExpr);
+                EmitAssign("obj.map { ($0.key, $0.value) }");
                 return;
             }
 
-            // Enums / scalars / structs / etc
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
+            // Enum: underlying + wrap (expression)
+            if (t is IrType.Named { Kind: NamedKind.Enum, Name: var en })
             {
-                var expr = ReadExprInternal(t, bufferVar);
-                EmitAssign(expr);
+                EmitAssign(ReadEnumExpr(en, bufferVar));
                 return;
             }
 

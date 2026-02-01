@@ -1,4 +1,7 @@
-﻿namespace extgen.Model
+﻿using codegencore.Model;
+using extgen.Model.Utils;
+
+namespace extgen.Model
 {
     public static class IrAnalysis
     {
@@ -9,9 +12,9 @@
             directCount = 0;
             foreach (var p in fn.Parameters)
             {
-                if (p.Type.IsNullable) return false;
-                if (p.Type.IsNumericScalar) { directCount++; continue; }
-                if (p.Type.IsStringScalar) { hasString = true; directCount++; continue; }
+                if (p.Type.IsNullable()) return false;
+                if (IrTypeUtil.IsStringScalar(p.Type)) { hasString = true; directCount++; continue; }
+                if (IrTypeUtil.IsNumericScalar(p.Type) && !(p.Type is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) { directCount++; continue; }
                 // non‑directable
                 return false;
             }
@@ -34,12 +37,15 @@
             return !feasible;
         }
 
-        public static bool NeedsRetBuffer(IrFunction fn) => fn.ReturnType.Kind switch
-            {
-                IrTypeKind.Void => false,
-                IrTypeKind.Scalar => !(fn.ReturnType.IsNumericScalar || fn.ReturnType.IsStringScalar),   // numeric → double
-                _ => true                              // everything else needs a buffer
-            };
+        public static bool NeedsRetBuffer(IrFunction fn) {
+
+            if (fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Void }) return false;
+
+            if (IrTypeUtil.IsStringScalar(fn.ReturnType)) return false;
+            if (IrTypeUtil.IsNumericScalar(fn.ReturnType) && !(fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) return false;
+
+            return true;
+        }
 
         public static IEnumerable<IrParameter> DirectArgs(IrFunction fn)
         {

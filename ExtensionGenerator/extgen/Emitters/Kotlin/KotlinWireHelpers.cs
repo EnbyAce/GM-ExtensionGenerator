@@ -1,6 +1,6 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Bridge;
-using extgen.Model;
 
 namespace extgen.Emitters.Kotlin
 {

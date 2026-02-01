@@ -1,4 +1,4 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
 
 namespace extgen.TypeSystem.Java
 {
@@ -6,73 +6,87 @@ namespace extgen.TypeSystem.Java
     {
         public string Map(IrType t, bool owned = false)
         {
-            // 1) Base "core" type, without collection / nullability
-            string core = t.Kind switch
-            {
-                IrTypeKind.Void => "void",
-                IrTypeKind.Enum => MapEnum(t),
-                IrTypeKind.Struct => MapStruct(t),
-                IrTypeKind.Scalar => MapScalar(t),
-                IrTypeKind.Any => "GMValue",
-                IrTypeKind.AnyArray => "java.util.List<GMValue>",
-                IrTypeKind.AnyMap => "java.util.Map<String, GMValue>",
-                IrTypeKind.Function => "GMFunction",
-                IrTypeKind.Buffer => MapBuffer(t),
-                IrTypeKind.Variant => "Object",
+            // 1) unwrap nullable (we apply Optional<> at the end)
+            var isNullable = IrType.IsNullable(t);
+            t = IrType.StripNullable(t);
 
-                _ => "Object"
-            };
+            // 2) map the non-nullable type
+            var core = MapNonNullable(t, owned);
 
-            // 2) Collections
-            if (t.IsCollection)
-            {
-                var elem = IrHelpers.Element(t);
-                var elemType = Map(elem);
-                core = MapCollection(t, elemType);
-            }
-
-            // 3) Nullable -> Optional<BoxedType>
-            if (t.IsNullable)
-            {
+            // 3) apply Optional<...> for nullable
+            if (isNullable)
                 core = $"java.util.Optional<{Box(core)}>";
-            }
 
             return core;
         }
 
-        public string MapScalar(IrType t, bool owned = false) => t.Name switch
+        private string MapNonNullable(IrType t, bool owned)
         {
-            "bool" => "boolean",
-            "int8" => "byte",
-            "int16" => "short",
-            "int32" => "int",
-            "int64" => "long",
-            "uint8" => "byte",
-            "uint16" => "short",
-            "uint32" => "int",
-            "uint64" => "long",
-            "float" => "float",
-            "double" => "double",
-            "string" => MapString(t, owned),
-            _ => throw new InvalidDataException("type not valid scalar")
-        };
+            return t switch
+            {
+                IrType.Array a => MapArray(a, owned),
 
-        public string MapEnum(IrType t) => t.Name;
-        public string MapStruct(IrType t) => t.Name;
-        public string MapString(IrType t, bool owned = false) => "String";
-        public string MapBuffer(IrType t) => "ByteBuffer";
-        
-        public string MapCollection(IrType t, string elementType)
-        {
-            // fixed-length: T[]   else: List<T>
-            return t.FixedLength is int
-                ? $"{elementType}[]"
-                : $"java.util.List<{Box(elementType)}>";
+                IrType.Named n => n.Kind switch
+                {
+                    NamedKind.Enum => MapEnum(n),
+                    NamedKind.Struct => MapStruct(n),
+                    _ => n.Name
+                },
+
+                IrType.Builtin b => MapBuiltin(b, owned),
+
+                // If you add more shapes later, you'll be forced to update here.
+                _ => "Object"
+            };
         }
 
-        // ------------------------------
-        // Java type mapping (used by both Java & Kotlin flows)
-        // ------------------------------
+        private string MapArray(IrType.Array a, bool owned)
+        {
+            // Fixed-length => T[] else List<T>
+            // Note: Array element may itself be nullable; preserve by mapping element recursively.
+            var elem = Map(a.Element, owned);
+
+            return a.FixedLength is int
+                ? $"{elem}[]"
+                : $"java.util.List<{Box(elem)}>";
+        }
+
+        private string MapBuiltin(IrType.Builtin b, bool owned)
+        {
+            return b.Kind switch
+            {
+                BuiltinKind.Void => "void",
+
+                BuiltinKind.Bool => "boolean",
+
+                BuiltinKind.Int8 or BuiltinKind.UInt8 => "byte",
+                BuiltinKind.Int16 or BuiltinKind.UInt16 => "short",
+                BuiltinKind.Int32 or BuiltinKind.UInt32 => "int",
+                BuiltinKind.Int64 or BuiltinKind.UInt64 => "long",
+
+                BuiltinKind.Float32 => "float",
+                BuiltinKind.Float64 => "double",
+
+                BuiltinKind.String => MapString(owned),
+
+                // Your earlier mapping: Any is GMValue, and AnyArray/AnyMap map to generic containers
+                BuiltinKind.Any => "GMValue",
+                BuiltinKind.AnyArray => "java.util.List<GMValue>",
+                BuiltinKind.AnyMap => "java.util.Map<String, GMValue>",
+
+                BuiltinKind.Function => "GMFunction",
+                BuiltinKind.Buffer => "java.nio.ByteBuffer",
+
+                _ => "Object"
+            };
+        }
+
+        private static string MapEnum(IrType.Named n) => n.Name;
+
+        private static string MapStruct(IrType.Named n) => n.Name;
+
+        private static string MapString(bool owned) => "String";
+
         private static string Box(string primitive) => primitive switch
         {
             "boolean" => "Boolean",
@@ -85,9 +99,6 @@ namespace extgen.TypeSystem.Java
             _ => primitive
         };
 
-        public string MapPassType(IrType type, bool owned = false)
-        {
-            return Map(type, owned);
-        }
+        public string MapPassType(IrType type, bool owned = false) => Map(type, owned);
     }
 }

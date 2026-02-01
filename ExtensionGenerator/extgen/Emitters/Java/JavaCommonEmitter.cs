@@ -1,17 +1,15 @@
-﻿using codegencore.Writers;
+﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Java;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.TypeSystem.Java;
 using extgen.Utils;
-using System.Text;
 
 namespace extgen.Emitters.Java
 {
     internal sealed class JavaCommonEmitter(JavaEmitterContext ctx, JavaTypeMap typeMap, JavaBridgeGenerator bridge)
     {
-        private readonly JavaWireHelpers wireHelpers = new(ctx.Runtime, typeMap);
-
         public void EmitJavaArtifacts(IrCompilation c, JavaLayout layout)
         {
             // Enums
@@ -23,8 +21,10 @@ namespace extgen.Emitters.Java
                 FileEmitHelpers.WriteJava(layout.Records, $"{s.Name}.java", w => EmitRecord(ctx, s, i, w));
 
             // Codecs
+            var enums = new IrTypeEnumResolver(c.Enums);
+            var wireHelpers = new JavaWireHelpers(ctx.Runtime, typeMap, enums);
             foreach (var s in c.Structs)
-                FileEmitHelpers.WriteJava(layout.Codecs, $"{s.Name}Codec.java", w => EmitCodec(ctx, s, w));
+                FileEmitHelpers.WriteJava(layout.Codecs, $"{s.Name}Codec.java", w => EmitCodec(ctx, s, w, wireHelpers));
         }
 
         public void EmitInternal(IrCompilation c, JavaLayout layout)
@@ -93,10 +93,10 @@ namespace extgen.Emitters.Java
 
             w.Package($"{pkg}.records").Line();
 
-            bool needsOptional = s.Fields.Any(f => f.Type.IsNullable);
-            bool needsList = s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is null);
-            bool needsArray = s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is int && f.Type.Kind == IrTypeKind.Struct);
-            bool needsEnum = s.Fields.Any(f => f.Type.Kind == IrTypeKind.Enum);
+            bool needsOptional = s.Fields.Any(f => IrType.IsNullable(f.Type));
+            bool needsList = s.Fields.Any(f => f.Type.IsVarArray());
+            bool needsArray = s.Fields.Any(f => f.Type.IsFixedArray());
+            bool needsEnum = s.Fields.Any(f => f.Type.IsEnum());
 
             w.Import($"{pkg}.{ctx.Runtime.WireClass}");
             w.Import($"{pkg}.codecs.*");
@@ -124,17 +124,17 @@ namespace extgen.Emitters.Java
             }, implements: [$"{ctx.Runtime.WireClass}.ITypedStruct"], modifiers: ["public"]);
         }
 
-        private void EmitCodec(JavaEmitterContext ctx, IrStruct s, JavaWriter w)
+        private void EmitCodec(JavaEmitterContext ctx, IrStruct s, JavaWriter w, JavaWireHelpers wireHelpers)
         {
             string pkg = ctx.Runtime.BasePackage;
             string wire = ctx.Runtime.WireClass;
 
             w.Package($"{pkg}.codecs").Line();
 
-            bool needsOptional = s.Fields.Any(f => f.Type.IsNullable);
-            bool needsList = s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is null);
-            bool needsArray = s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is int);
-            bool needsEnum = s.Fields.Any(f => f.Type.Kind == IrTypeKind.Enum);
+            bool needsOptional = s.Fields.Any(f => IrType.IsNullable(f.Type));
+            bool needsList = s.Fields.Any(f => f.Type.IsVarArray());
+            bool needsArray = s.Fields.Any(f => f.Type.IsFixedArray());
+            bool needsEnum = s.Fields.Any(f => f.Type.IsEnum());
 
             w.Import("java.nio.ByteBuffer").Line();
 
@@ -181,16 +181,16 @@ namespace extgen.Emitters.Java
             string cls = $"{c.Name}Interface";
 
             bool needsOptional = 
-                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsNullable)) || 
-                c.Functions.Any(f => f.Parameters.Any(p => p.IsOptional) || f.ReturnType.IsNullable);
-            bool needsList = 
-                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is null)) || 
-                c.Functions.Any(f => f.Parameters.Any(p => p.Type.IsCollection && p.Type.FixedLength is null) || 
-                (f.ReturnType.IsCollection && f.ReturnType.FixedLength is null));
+                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsNullable())) || 
+                c.Functions.Any(f => f.Parameters.Any(p => p.IsOptional) || f.ReturnType.IsNullable());
+            bool needsList =
+                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsVarArray())) ||
+                c.Functions.Any(f => f.Parameters.Any(p => p.Type.IsVarArray()) ||
+                f.ReturnType.IsVarArray());
             bool needsArray =
-                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsCollection && f.Type.FixedLength is not null)) ||
-                c.Functions.Any(f => f.Parameters.Any(p => p.Type.IsCollection && p.Type.FixedLength is not null) ||
-                (f.ReturnType.IsCollection && f.ReturnType.FixedLength is not null));
+                c.Structs.Any(s => s.Fields.Any(f => f.Type.IsFixedArray())) ||
+                c.Functions.Any(f => f.Parameters.Any(p => p.Type.IsFixedArray()) ||
+                f.ReturnType.IsFixedArray());
 
             bool needsEnum = c.Enums.Any();
             bool needsRecords = c.Structs.Any();

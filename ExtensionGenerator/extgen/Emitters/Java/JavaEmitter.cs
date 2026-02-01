@@ -1,5 +1,7 @@
-﻿using extgen.Bridge.Java;
+﻿using codegencore.Model;
+using extgen.Bridge.Java;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Java;
 
@@ -28,7 +30,8 @@ namespace extgen.Emitters.Java
 
         private void EmitAll(JavaEmitterContext ctx, IrCompilation c, JavaLayout layout)
         {
-            var wireHelpers = new JavaWireHelpers(ctx.Runtime, typeMap);
+            var enums = new IrTypeEnumResolver(c.Enums);
+            var wireHelpers = new JavaWireHelpers(ctx.Runtime, typeMap, enums);
             var bridge = new JavaBridge(typeMap, ctx.Runtime, wireHelpers);
 
             var common = new JavaCommonEmitter(ctx, typeMap, bridge);

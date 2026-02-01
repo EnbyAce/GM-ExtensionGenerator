@@ -1,7 +1,9 @@
-﻿using extgen.Model;
+﻿using codegencore.Model;
+using extgen.Model;
 using extgen.Options;
 using System.Text;
 using System.Text.Json;
+
 
 namespace extgen.Emitters.Yy
 {
@@ -25,8 +27,8 @@ namespace extgen.Emitters.Yy
             using var ms = new MemoryStream();
             var jsonWriterOptions = new JsonWriterOptions { Indented = false };
 
-            var usesFunctions = comp.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffer = comp.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = comp.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffer = comp.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             foreach (var fn in comp.Functions)
             {
@@ -81,19 +83,15 @@ namespace extgen.Emitters.Yy
             {
                 foreach (var p in IrAnalysis.DirectArgs(fn))
                 {
-                    if (p.Type.IsStringScalar)
+                    if (p.Type is IrType.Builtin { Kind: BuiltinKind.String })
                     {
                         args.Add(1); // char*
                         docs.Add($"@param {{String}} {p.Name}");
                     }
-                    else if (p.Type.IsNumericScalar)
+                    else
                     {
                         args.Add(2); // double
                         docs.Add($"@param {{Real}} {p.Name}");
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"Parameter {p.Name} is neither string nor numeric.");
                     }
                 }
             }
@@ -105,7 +103,7 @@ namespace extgen.Emitters.Yy
                 docs.Add("@param {Pointer} _ret_buffer");
                 docs.Add("@param {Real} _ret_buffer_length");
             }
-            else if (fn.ReturnType.IsStringScalar)
+            else if (fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.String })
             {
                 returnType = 1;                    // 1 = char*
             }

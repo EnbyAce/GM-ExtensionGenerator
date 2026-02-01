@@ -1,4 +1,5 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.Options;
@@ -76,10 +77,10 @@ namespace extgen.Emitters.Jni
 
             w.Class($"{ctx.ExtName}Internal", "RunnerSocial", body =>
             {
-                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
-                if (usesFunctions)
+             if (usesFunctions)
                 {
                     body.Function(
                         name: $"{ctx.Runtime.NativePrefix}{ctx.ExtName}_invocation_handler",
@@ -147,8 +148,8 @@ namespace extgen.Emitters.Jni
                 body.FunctionDecl("nativeRegister", [], modifiers: ["private", "static", "native"]);
                 body.Line();
 
-                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+                var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+                var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
                 if (usesFunctions)
                 {
@@ -213,8 +214,8 @@ namespace extgen.Emitters.Jni
 
         private static void EmitNativeInternals(JniEmitterContext ctx, IrCompilation c, CppWriter w)
         {
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer)));
 
             if (usesFunctions)
             {
@@ -357,8 +358,8 @@ namespace extgen.Emitters.Jni
 
         private static void EmitNativeRegister(JniEmitterContext ctx, IrCompilation c, CppWriter w, string packageUnderscore, string bridgeClass, List<(string javaName, string jniSig, string cFun)> entries)
         {
-            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Function));
-            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.Kind == IrTypeKind.Buffer));
+            var usesFunctions = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Function)));
+            var usesBuffers = c.Functions.Any(f => f.Parameters.Any(p => p.Type.ContainsBuiltin(BuiltinKind.Buffer) ));
 
             // ---- nativeRegister + RegisterNatives (unchanged logic, cleaner input) ----
             var nativeInitSymbol = $"Java_{packageUnderscore}_{bridgeClass}_nativeRegister";

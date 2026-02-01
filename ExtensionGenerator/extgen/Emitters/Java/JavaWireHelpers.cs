@@ -1,110 +1,145 @@
-﻿using codegencore.Writers.Lang;
+﻿using codegencore.Model;
+using codegencore.Writers.Lang;
 using extgen.Bridge;
-using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Java;
 
 namespace extgen.Emitters.Java
 {
-    internal class JavaWireHelpers(RuntimeNaming runtime, JavaTypeMap typeMap) : WireHelpersBase<JavaWriter>
+    internal sealed class JavaWireHelpers : WireHelpersBase<JavaWriter>
     {
+        private readonly RuntimeNaming _runtime;
+        private readonly JavaTypeMap _typeMap;
+        private readonly IIrTypeEnumResolver _enums;
+
+        public JavaWireHelpers(RuntimeNaming runtime, JavaTypeMap typeMap, IIrTypeEnumResolver enums)
+        {
+            _runtime = runtime;
+            _typeMap = typeMap;
+            _enums = enums;
+        }
+
         // ============================================================
-        // Core scalar read / write helpers
+        // Core scalar read / write helpers (Builtins only)
         // ============================================================
+
+        private static bool IsScalarBuiltin(BuiltinKind k) => k is
+            BuiltinKind.Bool or
+            BuiltinKind.Int8 or BuiltinKind.UInt8 or
+            BuiltinKind.Int16 or BuiltinKind.UInt16 or
+            BuiltinKind.Int32 or BuiltinKind.UInt32 or
+            BuiltinKind.Int64 or BuiltinKind.UInt64 or
+            BuiltinKind.Float32 or BuiltinKind.Float64 or
+            BuiltinKind.String;
+
+        private static bool IsIntegerLikeBuiltin(BuiltinKind k) => k is
+            BuiltinKind.Bool or
+            BuiltinKind.Int8 or BuiltinKind.UInt8 or
+            BuiltinKind.Int16 or BuiltinKind.UInt16 or
+            BuiltinKind.Int32 or BuiltinKind.UInt32 or
+            BuiltinKind.Int64 or BuiltinKind.UInt64;
 
         /// <summary>
         /// Read a scalar value (including float/double/string) from the buffer.
-        /// Used for *general* scalars, not enums.
+        /// Used for general scalars, not enums.
         /// </summary>
-        private static string ReadScalarCore(IrType t, string buf, string wire) =>
-            t.Name switch
-            {
-                "bool" => $"{wire}.readBool({buf})",
-                "int8" => $"{wire}.readI8({buf})",
-                "uint8" => $"{wire}.readI8({buf})",
-                "int16" => $"{wire}.readI16({buf})",
-                "uint16" => $"{wire}.readI16({buf})",
-                "int32" => $"{wire}.readI32({buf})",
-                "uint32" => $"{wire}.readI32({buf})",
-                "int64" => $"{wire}.readI64({buf})",
-                "uint64" => $"{wire}.readI64({buf})",
-                "float" => $"{wire}.readF32({buf})",
-                "double" => $"{wire}.readF64({buf})",
-                "string" => $"{wire}.readString({buf})",
-                _ => throw new NotSupportedException($"read unsupported scalar {t.Name}")
-            };
+        private static string ReadScalarCore(BuiltinKind k, string buf, string wire) => k switch
+        {
+            BuiltinKind.Bool => $"{wire}.readBool({buf})",
+            BuiltinKind.Int8 => $"{wire}.readI8({buf})",
+            BuiltinKind.UInt8 => $"{wire}.readI8({buf})",
+            BuiltinKind.Int16 => $"{wire}.readI16({buf})",
+            BuiltinKind.UInt16 => $"{wire}.readI16({buf})",
+            BuiltinKind.Int32 => $"{wire}.readI32({buf})",
+            BuiltinKind.UInt32 => $"{wire}.readI32({buf})",
+            BuiltinKind.Int64 => $"{wire}.readI64({buf})",
+            BuiltinKind.UInt64 => $"{wire}.readI64({buf})",
+            BuiltinKind.Float32 => $"{wire}.readF32({buf})",
+            BuiltinKind.Float64 => $"{wire}.readF64({buf})",
+            BuiltinKind.String => $"{wire}.readString({buf})",
+            _ => throw new NotSupportedException($"read unsupported scalar builtin {k}")
+        };
 
         /// <summary>
         /// Write a scalar value (including float/double/string) into the buffer.
-        /// Used for *general* scalars, not enums.
+        /// Used for general scalars, not enums.
         /// </summary>
-        private static string WriteScalarCore(IrType t, string buf, string val, string wire) =>
-            t.Name switch
-            {
-                "bool" => $"{wire}.writeBool({buf}, {val})",
-                "int8" => $"{wire}.writeI8({buf}, {val})",
-                "uint8" => $"{wire}.writeI8({buf}, {val})",
-                "int16" => $"{wire}.writeI16({buf}, {val})",
-                "uint16" => $"{wire}.writeI16({buf}, {val})",
-                "int32" => $"{wire}.writeI32({buf}, {val})",
-                "uint32" => $"{wire}.writeI32({buf}, {val})",
-                "int64" => $"{wire}.writeI64({buf}, {val})",
-                "uint64" => $"{wire}.writeI64({buf}, {val})",
-                "float" => $"{wire}.writeF32({buf}, {val})",
-                "double" => $"{wire}.writeF64({buf}, {val})",
-                "string" => $"{wire}.writeString({buf}, {val})",
-                _ => throw new NotSupportedException($"write unsupported scalar {t.Name}")
-            };
+        private static string WriteScalarCore(BuiltinKind k, string buf, string val, string wire) => k switch
+        {
+            BuiltinKind.Bool => $"{wire}.writeBool({buf}, {val})",
+            BuiltinKind.Int8 => $"{wire}.writeI8({buf}, {val})",
+            BuiltinKind.UInt8 => $"{wire}.writeI8({buf}, {val})",
+            BuiltinKind.Int16 => $"{wire}.writeI16({buf}, {val})",
+            BuiltinKind.UInt16 => $"{wire}.writeI16({buf}, {val})",
+            BuiltinKind.Int32 => $"{wire}.writeI32({buf}, {val})",
+            BuiltinKind.UInt32 => $"{wire}.writeI32({buf}, {val})",
+            BuiltinKind.Int64 => $"{wire}.writeI64({buf}, {val})",
+            BuiltinKind.UInt64 => $"{wire}.writeI64({buf}, {val})",
+            BuiltinKind.Float32 => $"{wire}.writeF32({buf}, {val})",
+            BuiltinKind.Float64 => $"{wire}.writeF64({buf}, {val})",
+            BuiltinKind.String => $"{wire}.writeString({buf}, {val})",
+            _ => throw new NotSupportedException($"write unsupported scalar builtin {k}")
+        };
 
         // ============================================================
         // Integer-only scalar helpers (for enum underlying types)
         // ============================================================
 
-        /// <summary>
-        /// Read an integer-like scalar (bool/int*/uint*) from the buffer.
-        /// Used strictly for enum underlying values. Will throw for float/double/string.
-        /// </summary>
-        private static string ReadScalarIntegerOnly(IrType t, string buf, string wire) =>
-            t.Name switch
-            {
-                "bool" => $"{wire}.readBool({buf})",
-                "int8" => $"{wire}.readI8({buf})",
-                "uint8" => $"{wire}.readI8({buf})",
-                "int16" => $"{wire}.readI16({buf})",
-                "uint16" => $"{wire}.readI16({buf})",
-                "int32" => $"{wire}.readI32({buf})",
-                "uint32" => $"{wire}.readI32({buf})",
-                "int64" => $"{wire}.readI64({buf})",
-                "uint64" => $"{wire}.readI64({buf})",
-                _ => throw new NotSupportedException(
-                        $"Invalid enum underlying type for Java: {t.Name}")
-            };
+        private static string ReadScalarIntegerOnly(BuiltinKind k, string buf, string wire) => k switch
+        {
+            BuiltinKind.Bool => $"{wire}.readBool({buf})",
+            BuiltinKind.Int8 => $"{wire}.readI8({buf})",
+            BuiltinKind.UInt8 => $"{wire}.readI8({buf})",
+            BuiltinKind.Int16 => $"{wire}.readI16({buf})",
+            BuiltinKind.UInt16 => $"{wire}.readI16({buf})",
+            BuiltinKind.Int32 => $"{wire}.readI32({buf})",
+            BuiltinKind.UInt32 => $"{wire}.readI32({buf})",
+            BuiltinKind.Int64 => $"{wire}.readI64({buf})",
+            BuiltinKind.UInt64 => $"{wire}.readI64({buf})",
+            _ => throw new NotSupportedException($"Invalid enum underlying builtin for Java: {k}")
+        };
 
-        /// <summary>
-        /// Write an integer-like scalar (bool/int*/uint*) into the buffer.
-        /// Used strictly for enum underlying values. Will throw for float/double/string.
-        /// </summary>
-        private static string WriteScalarIntegerOnly(IrType t, string buf, string val, string wire) =>
-            t.Name switch
-            {
-                "bool" => $"{wire}.writeBool({buf}, {val})",
-                "int8" => $"{wire}.writeI8({buf}, {val})",
-                "uint8" => $"{wire}.writeI8({buf}, {val})",
-                "int16" => $"{wire}.writeI16({buf}, {val})",
-                "uint16" => $"{wire}.writeI16({buf}, {val})",
-                "int32" => $"{wire}.writeI32({buf}, {val})",
-                "uint32" => $"{wire}.writeI32({buf}, {val})",
-                "int64" => $"{wire}.writeI64({buf}, {val})",
-                "uint64" => $"{wire}.writeI64({buf}, {val})",
-                _ => throw new NotSupportedException(
-                        $"Invalid enum underlying type for Java: {t.Name}")
-            };
+        private static string WriteScalarIntegerOnly(BuiltinKind k, string buf, string val, string wire) => k switch
+        {
+            BuiltinKind.Bool => $"{wire}.writeBool({buf}, {val})",
+            BuiltinKind.Int8 => $"{wire}.writeI8({buf}, {val})",
+            BuiltinKind.UInt8 => $"{wire}.writeI8({buf}, {val})",
+            BuiltinKind.Int16 => $"{wire}.writeI16({buf}, {val})",
+            BuiltinKind.UInt16 => $"{wire}.writeI16({buf}, {val})",
+            BuiltinKind.Int32 => $"{wire}.writeI32({buf}, {val})",
+            BuiltinKind.UInt32 => $"{wire}.writeI32({buf}, {val})",
+            BuiltinKind.Int64 => $"{wire}.writeI64({buf}, {val})",
+            BuiltinKind.UInt64 => $"{wire}.writeI64({buf}, {val})",
+            _ => throw new NotSupportedException($"Invalid enum underlying builtin for Java: {k}")
+        };
 
-        private static string ReadUnderlying(IrType u, string buf, string wire) =>
-            ReadScalarIntegerOnly(u, buf, wire);
+        private static string ReadUnderlying(IrType underlying, string buf, string wire)
+        {
+            underlying = IrType.StripNullable(underlying);
 
-        private static string WriteUnderlying(IrType u, string buf, string val, string wire) =>
-            WriteScalarIntegerOnly(u, buf, val, wire);
+            if (underlying is not IrType.Builtin b || !IsIntegerLikeBuiltin(b.Kind))
+                throw new NotSupportedException($"Invalid enum underlying type for Java: {underlying}");
+
+            return ReadScalarIntegerOnly(b.Kind, buf, wire);
+        }
+
+        private static string WriteUnderlying(IrType underlying, string buf, string val, string wire)
+        {
+            underlying = IrType.StripNullable(underlying);
+
+            if (underlying is not IrType.Builtin b || !IsIntegerLikeBuiltin(b.Kind))
+                throw new NotSupportedException($"Invalid enum underlying type for Java: {underlying}");
+
+            return WriteScalarIntegerOnly(b.Kind, buf, val, wire);
+        }
+
+        private IrType GetEnumUnderlyingOrThrow(string enumName)
+        {
+            if (!_enums.TryGetUnderlying(enumName, out var underlying))
+                throw new NotSupportedException($"Enum underlying type not found for '{enumName}'.");
+            return underlying;
+        }
 
         // ============================================================
         // Read / Write expressions (non-collection)
@@ -112,82 +147,98 @@ namespace extgen.Emitters.Java
 
         public override string ReadExpr(IrType t, string bufferVar)
         {
-            var wire = runtime.WireClass;
+            var wire = _runtime.WireClass;
 
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
-                return $"{t.Name}.from({ReadUnderlying(t.Underlying, bufferVar, wire)})";
+            // DecodeLines handles Optional + arrays. Here we focus on the "atomic" read.
+            t = IrType.StripNullable(t);
 
-            if (t.Kind == IrTypeKind.Struct)
-                return $"{t.Name}Codec.read({bufferVar})";
+            return t switch
+            {
+                // Enum: read underlying then convert
+                IrType.Named { Kind: NamedKind.Enum, Name: var name } =>
+                    $"{name}.from({ReadUnderlying(GetEnumUnderlyingOrThrow(name), bufferVar, wire)})",
 
-            if (t.Kind == IrTypeKind.Scalar)
-                return ReadScalarCore(t, bufferVar, wire);
+                // Struct: codec
+                IrType.Named { Kind: NamedKind.Struct, Name: var st } =>
+                    $"{st}Codec.read({bufferVar})",
 
-            if (t.Kind == IrTypeKind.Function)
-                return $"{wire}.readGMFunction({bufferVar}, {runtime.DispatchQueueField})";
+                // Builtin scalar-ish
+                IrType.Builtin { Kind: var k } when IsScalarBuiltin(k) =>
+                    ReadScalarCore(k, bufferVar, wire),
 
-            if (t.Kind == IrTypeKind.Any)
-                return $"{wire}.readGMValue({bufferVar})";
+                // Special builtins
+                IrType.Builtin { Kind: BuiltinKind.Function } =>
+                    $"{wire}.readGMFunction({bufferVar}, {_runtime.DispatchQueueField})",
 
-            if (t.Kind == IrTypeKind.AnyArray)
-                return $"{wire}.readGMArray({bufferVar})";
+                IrType.Builtin { Kind: BuiltinKind.Any } =>
+                    $"{wire}.readGMValue({bufferVar})",
 
-            if (t.Kind == IrTypeKind.AnyMap)
-                return $"{wire}.readGMObject({bufferVar})";
+                IrType.Builtin { Kind: BuiltinKind.AnyArray } =>
+                    $"{wire}.readGMArray({bufferVar})",
 
-            if (t.Kind == IrTypeKind.Buffer)
-                return $"{runtime.BufferQueueField}.poll()";
+                IrType.Builtin { Kind: BuiltinKind.AnyMap } =>
+                    $"{wire}.readGMObject({bufferVar})",
 
-            throw new NotSupportedException($"read unsupported kind {t.Kind}");
+                IrType.Builtin { Kind: BuiltinKind.Buffer } =>
+                    $"{_runtime.BufferQueueField}.poll()",
+
+                _ => throw new NotSupportedException($"read unsupported type {t}")
+            };
         }
 
         public override string WriteExpr(IrType t, string bufferVar, string valueExpr)
         {
-            var wire = runtime.WireClass;
+            var wire = _runtime.WireClass;
 
-            if (t.Kind == IrTypeKind.Enum && t.Underlying is not null)
-                return WriteUnderlying(t.Underlying, bufferVar, $"{valueExpr}.value()", wire);
+            // EncodeLines handles Optional + arrays. Here we focus on the "atomic" write.
+            t = IrType.StripNullable(t);
 
-            if (t.Kind == IrTypeKind.Struct)
-                return $"{t.Name}Codec.write({bufferVar}, {valueExpr})";
+            return t switch
+            {
+                // Enum: write underlying of .value()
+                IrType.Named { Kind: NamedKind.Enum, Name: var name } =>
+                    WriteUnderlying(GetEnumUnderlyingOrThrow(name), bufferVar, $"{valueExpr}.value()", wire),
 
-            if (t.Kind == IrTypeKind.Scalar)
-                return WriteScalarCore(t, bufferVar, valueExpr, wire);
+                // Struct: codec
+                IrType.Named { Kind: NamedKind.Struct, Name: var st } =>
+                    $"{st}Codec.write({bufferVar}, {valueExpr})",
 
-            if (t.Kind == IrTypeKind.Any)
-                return $"{wire}.writeGMValue({bufferVar}, {valueExpr})";
+                // Builtin scalar-ish
+                IrType.Builtin { Kind: var k } when IsScalarBuiltin(k) =>
+                    WriteScalarCore(k, bufferVar, valueExpr, wire),
 
-            if (t.Kind == IrTypeKind.AnyArray)
-                return $"{wire}.writeGMArray({bufferVar}, {valueExpr})";
+                // Special builtins
+                IrType.Builtin { Kind: BuiltinKind.Any } =>
+                    $"{wire}.writeGMValue({bufferVar}, {valueExpr})",
 
-            if (t.Kind == IrTypeKind.AnyMap)
-                return $"{wire}.writeGMObject({bufferVar}, {valueExpr})";
+                IrType.Builtin { Kind: BuiltinKind.AnyArray } =>
+                    $"{wire}.writeGMArray({bufferVar}, {valueExpr})",
 
-            throw new NotSupportedException($"write unsupported kind {t.Kind}");
+                IrType.Builtin { Kind: BuiltinKind.AnyMap } =>
+                    $"{wire}.writeGMObject({bufferVar}, {valueExpr})",
+
+                _ => throw new NotSupportedException($"write unsupported type {t}")
+            };
         }
 
         // ============================================================
         // High-level decode / encode helpers (CStyleWriter-friendly)
         // ============================================================
 
-        /// <summary>
-        /// Decode a value of IrType t from the ByteBuffer into "accessor".
-        /// Uses IIrTypeMap for the Java declared type (including Optional/List/arrays).
-        /// </summary>
         public override void DecodeLines(JavaWriter w, IrType t, string accessor, bool declare, string bufferVar)
         {
-            var javaType = typeMap.Map(t);
+            var javaType = _typeMap.Map(t);
 
             // Nullable -> Optional<T> with leading presence bool
-            if (t.IsNullable)
+            if (IrType.IsNullable(t))
             {
                 w.Assign(accessor, "java.util.Optional.empty()", declare ? javaType : null);
 
-                w.If($"{runtime.WireClass}.readBool({bufferVar})", then =>
+                w.If($"{_runtime.WireClass}.readBool({bufferVar})", then =>
                 {
-                    string tmp = $"__opt_{accessor}";
+                    var inner = IrType.StripNullable(t);
+                    var tmp = $"__opt_{accessor}";
 
-                    var inner = t with { IsNullable = false };
                     DecodeLines(then, inner, tmp, true, bufferVar);
                     then.Line($"{accessor} = java.util.Optional.of({tmp});");
                 });
@@ -195,25 +246,27 @@ namespace extgen.Emitters.Java
                 return;
             }
 
-            // Collections: fixed-length -> T[], dynamic -> List<T>
-            if (t.IsCollection)
-            {
-                var el = IrHelpers.Element(t);
-                var elJavaType = typeMap.Map(el);
+            // Arrays: fixed-length -> T[], dynamic -> List<T>
+            t = IrType.StripNullable(t);
 
-                if (t.FixedLength is int n)
+            if (t is IrType.Array a)
+            {
+                var el = a.Element;
+                var elJavaType = _typeMap.Map(el);
+
+                if (a.FixedLength is int n)
                 {
                     string arrInit = $"new {elJavaType}[{n}]";
                     w.Assign(
                         accessor,
-                        $"{runtime.WireClass}.readFixedArray({bufferVar}, {n}, bb -> {ReadExpr(el, "bb")}, {arrInit})",
+                        $"{_runtime.WireClass}.readFixedArray({bufferVar}, {n}, bb -> {ReadExpr(el, "bb")}, {arrInit})",
                         declare ? javaType : null);
                 }
                 else
                 {
                     w.Assign(
                         accessor,
-                        $"{runtime.WireClass}.readList({bufferVar}, bb -> {ReadExpr(el, "bb")})",
+                        $"{_runtime.WireClass}.readList({bufferVar}, bb -> {ReadExpr(el, "bb")})",
                         declare ? javaType : null);
                 }
 
@@ -224,30 +277,29 @@ namespace extgen.Emitters.Java
             w.Assign(accessor, ReadExpr(t, bufferVar), declare ? javaType : null);
         }
 
-        /// <summary>
-        /// Encode a value of IrType t from "accessor" into the ByteBuffer.
-        /// </summary>
         public override void EncodeLines(JavaWriter w, IrType t, string accessor, string bufVar)
         {
-            var wireClass = runtime.WireClass;
+            var wireClass = _runtime.WireClass;
 
             // Nullable -> presence bool + payload if present
-            if (t.IsNullable)
+            if (IrType.IsNullable(t))
             {
-                var inner = t with { IsNullable = false };
+                var inner = IrType.StripNullable(t);
                 w.Line($"{wireClass}.writeBool({bufVar}, {accessor} != null && {accessor}.isPresent());");
                 w.If($"{accessor} != null && {accessor}.isPresent()",
                     then => EncodeLines(then, inner, $"{accessor}.get()", bufVar));
                 return;
             }
 
-            // Collections
-            if (t.IsCollection)
+            t = IrType.StripNullable(t);
+
+            // Arrays
+            if (t is IrType.Array a)
             {
-                var el = IrHelpers.Element(t);
+                var el = a.Element;
                 var lambda = $"(bb, x) -> {WriteExpr(el, "bb", "x")}";
 
-                if (t.FixedLength is int)
+                if (a.FixedLength is int)
                     w.Call($"{wireClass}.writeFixedArray", bufVar, accessor, lambda).Line(";");
                 else
                     w.Call($"{wireClass}.writeList", bufVar, accessor, lambda).Line(";");
@@ -263,25 +315,22 @@ namespace extgen.Emitters.Java
         // Helper for enum field type in generated Java
         // ============================================================
 
-        /// <summary>
-        /// Map an enum's underlying IrType into the Java primitive type used
-        /// for the backing field in the generated enum (e.g. int, long, boolean).
-        /// Only integral-like types are allowed here.
-        /// </summary>
-        public static string ScalarForEnum(IrType underlying) =>
-            underlying.Name switch
+        public static string ScalarForEnum(IrType underlying)
+        {
+            underlying = IrType.StripNullable(underlying);
+
+            if (underlying is not IrType.Builtin b || !IsIntegerLikeBuiltin(b.Kind))
+                throw new NotSupportedException($"Invalid enum underlying type for Java: {underlying}");
+
+            return b.Kind switch
             {
-                "bool" => "boolean",
-                "int8" => "byte",
-                "uint8" => "byte",
-                "int16" => "short",
-                "uint16" => "short",
-                "int32" => "int",
-                "uint32" => "int",
-                "int64" => "long",
-                "uint64" => "long",
-                _ => throw new NotSupportedException(
-                        $"Invalid enum underlying type for Java: {underlying.Name}")
+                BuiltinKind.Bool => "boolean",
+                BuiltinKind.Int8 or BuiltinKind.UInt8 => "byte",
+                BuiltinKind.Int16 or BuiltinKind.UInt16 => "short",
+                BuiltinKind.Int32 or BuiltinKind.UInt32 => "int",
+                BuiltinKind.Int64 or BuiltinKind.UInt64 => "long",
+                _ => throw new NotSupportedException($"Invalid enum underlying type for Java: {b.Kind}")
             };
+        }
     }
 }

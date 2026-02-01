@@ -34,15 +34,15 @@ namespace extgen.Parsing.Gmidl
 
             var validator = new IrValidator(
                 // Types
+                new NoDuplicateSymbolsRule(),
                 new NoUnknownTypeAllowedRule(),
-                new NoVariantDataAllowedRule(),
 
                 // Buffer and Function
                 new NoBufferOrFunctionInStructFieldsRule(),
                 new NoBufferOrFunctionReturnTypesRule(),
                 
                 // Enum
-                new EnumUnderlyingMustBeScalarRule(),
+                new EnumUnderlyingMustBeIntegralScalarRule(),
                 new EnumMemberNamesMustBeUniqueRule(),
 
                 // Naming
@@ -53,13 +53,14 @@ namespace extgen.Parsing.Gmidl
             var diags = validator.Validate(comp);
             var errors = diags.Where(d => d.Severity == IrSeverity.Error).ToArray();
 
-            if (errors.Length > 0)
+            if (diags.Length > 0)
             {
                 foreach (var d in diags.OrderByDescending(d => d.Severity))
                     Console.Error.WriteLine($"{d.Severity} {d.Code}: {d.Message}" +
                                             (d.Path is null ? "" : $" @ {d.Path}"));
 
-                throw new InvalidOperationException($"IR validation failed with {errors.Length} error(s).");
+                if (errors.Length > 0)
+                    throw new InvalidOperationException($"IR validation failed with {errors.Length} error(s).");
             }
 
             return comp;

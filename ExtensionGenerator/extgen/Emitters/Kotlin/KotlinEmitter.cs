@@ -3,6 +3,7 @@ using codegencore.Writers.Lang;
 using extgen.Bridge.Kotlin;
 using extgen.Emitters.Java;
 using extgen.Model;
+using extgen.Model.Utils;
 using extgen.Options;
 using extgen.TypeSystem.Java;
 using extgen.TypeSystem.Kotlin;
@@ -40,7 +41,8 @@ namespace extgen.Emitters.Kotlin
             var javaTypeMap = new JavaTypeMap();
             var javaCtx = new JavaEmitterContext(ctx.ExtName, ctx.Options, ctx.Runtime);
 
-            var wireHelpers = new JavaWireHelpers(javaCtx.Runtime, javaTypeMap);
+            var enums = new IrTypeEnumResolver(c.Enums);
+            var wireHelpers = new JavaWireHelpers(javaCtx.Runtime, javaTypeMap, enums);
             var bridge = new KotlinBridge(javaTypeMap, javaCtx.Runtime, wireHelpers);
 
             var common = new JavaCommonEmitter(javaCtx, javaTypeMap, bridge);
