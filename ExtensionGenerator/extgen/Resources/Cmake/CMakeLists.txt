@@ -34,17 +34,18 @@ if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
 endif()
 
 # ============================================================
-# Platform classification
+# Platform classification (robust for Xcode + Ninja)
 # ============================================================
 set(EXTGEN_IS_IOS FALSE)
 set(EXTGEN_IS_TVOS FALSE)
 set(EXTGEN_IS_APPLE_MOBILE FALSE)
 
 if(APPLE)
-  if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # CMAKE_OSX_SYSROOT may be: iphoneos, iphonesimulator, appletvos, appletvsimulator, or a full path.
+  if(CMAKE_OSX_SYSROOT MATCHES "iphone")
     set(EXTGEN_IS_IOS TRUE)
     set(EXTGEN_IS_APPLE_MOBILE TRUE)
-  elseif(CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+  elseif(CMAKE_OSX_SYSROOT MATCHES "appletv")
     set(EXTGEN_IS_TVOS TRUE)
     set(EXTGEN_IS_APPLE_MOBILE TRUE)
   endif()

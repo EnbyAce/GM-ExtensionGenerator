@@ -125,7 +125,7 @@ elseif(APPLE)
   # ----------------------
   # iOS / tvOS (mobile)
   # ----------------------
-  if(CMAKE_SYSTEM_NAME STREQUAL "iOS" OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+  if((CMAKE_OSX_SYSROOT MATCHES "iphone") OR (CMAKE_OSX_SYSROOT MATCHES "appletv"))
     # Choose either xcframework/framework or static .a for mobile
     option(EXT_TP_IOS_USE_XCFRAMEWORK
            "iOS/tvOS: link (XC)Framework via -F/-framework" OFF)
