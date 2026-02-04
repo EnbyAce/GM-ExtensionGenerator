@@ -19,7 +19,6 @@
     <None Remove="Resources\Cpp\GMExtUtils.h" />
     <None Remove="Resources\Cpp\GMExtWire.cpp" />
     <None Remove="Resources\Cpp\GMExtWire.h" />
-    <None Remove="Resources\Gml\ext_core_api.gml" />
     <None Remove="Resources\Java\GMExtWire.java" />
     <None Remove="Resources\Swift\GMExtWire.swift" />
   </ItemGroup>
@@ -54,7 +53,7 @@
     <EmbeddedResource Include="Resources\Cpp\GMExtWire.h">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
-    <EmbeddedResource Include="Resources\Gml\ext_core_api.gml">
+    <EmbeddedResource Include="Resources\Gml\ExtensionCore_api.gml">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="Resources\Java\GMExtWire.java">

@@ -1,5 +1,4 @@
 ﻿using extgen.Bridge.Objc;
-using extgen.Emitters.Java;
 using extgen.Model;
 using extgen.Model.Utils;
 using extgen.Options;

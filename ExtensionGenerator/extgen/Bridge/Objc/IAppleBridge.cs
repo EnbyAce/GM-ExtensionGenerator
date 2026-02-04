@@ -18,6 +18,8 @@ namespace extgen.Bridge.Objc
     /// </summary>
     internal interface IAppleBridge
     {
+        void EmitWire(ObjcLayout layout);
+
         /// <summary>
         /// Emit the implementation ivar in the class extension.
         /// e.g. @interface ExtInternal () { id&lt;ExtInterface&gt; __impl; }

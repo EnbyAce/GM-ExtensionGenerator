@@ -27,7 +27,7 @@ namespace extgen.Emitters.Cpp
             var layout = new CppLayout(dir, options);
 
             // 1) code gen files (always overwrite)
-            GenCommonFiles(layout.CoreDir);
+            EmitWire(layout.CoreDir);
 
             FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.h", w => EmitInternalHeader(ctx, comp, enums, w));
             FileEmitHelpers.WriteCpp(layout.CodeGenDir, $"{ext}Internal_native.cpp", w => EmitInternalImpl(ctx, comp, enums, w));
@@ -36,7 +36,7 @@ namespace extgen.Emitters.Cpp
             FileEmitHelpers.WriteCppIfMissing(layout.SourceDir, $"{string.Format(options.SourceFilename, ext)}.cpp", w => EmitUserImpl(ctx, w));
         }
 
-        public static void GenCommonFiles(string destinationFolder) {
+        public static void EmitWire(string destinationFolder) {
             Directory.CreateDirectory(destinationFolder);
 
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cpp.GMExtWire.cpp", Path.Combine(destinationFolder, "GMExtWire.cpp"));

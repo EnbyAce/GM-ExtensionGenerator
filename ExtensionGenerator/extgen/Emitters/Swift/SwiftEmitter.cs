@@ -1,5 +1,4 @@
 using codegencore.Model;
-using codegencore.Writers.Concrete;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Swift;
 using extgen.Emitters.Objc;
@@ -11,7 +10,6 @@ using extgen.TypeSystem.Cpp;
 using extgen.TypeSystem.Swift;
 using extgen.Utils;
 using System.Collections.Immutable;
-using System.Text;
 
 namespace extgen.Emitters.Swift
 {

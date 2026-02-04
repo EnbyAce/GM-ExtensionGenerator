@@ -1,7 +1,6 @@
 ﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
-using extgen.Emitters.Java;
 using extgen.Emitters.Objc;
 using extgen.Emitters.Utils;
 using extgen.Model;

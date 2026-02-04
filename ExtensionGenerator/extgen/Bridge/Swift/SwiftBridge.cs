@@ -6,6 +6,7 @@ using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.TypeSystem;
 using extgen.TypeSystem.Cpp;
+using extgen.Utils;
 
 namespace extgen.Bridge.Swift
 {
@@ -17,6 +18,11 @@ namespace extgen.Bridge.Swift
     /// </summary>
     internal sealed class SwiftBridge : IAppleBridge
     {
+        public void EmitWire(ObjcLayout layout)
+        {
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtWire.swift", Path.Combine(layout.CodeGenDir, "GMExtWire.swift"));
+        }
+
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
         {
             var ext = ctx.ExtName;

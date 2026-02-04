@@ -17,8 +17,7 @@ namespace extgen.Options
         [JsonPropertyName("cmake")]
         public CmakeEmitterOptions Cmake { get; set; } = new();
 
-        [JsonPropertyName("runtime")]
-        public RuntimeNaming Runtime { get; set; } = new();
+        public RuntimeNaming Runtime { get; } = new();
 
         // Per-target blocks (null = don’t generate)
         [JsonPropertyName("cpp")] public CppEmitterOptions? Cpp { get; set; }
@@ -30,6 +29,7 @@ namespace extgen.Options
         [JsonPropertyName("kotlin")] public JavaEmitterOptions? Kotlin { get; set; }
         [JsonPropertyName("jni")] public JniEmitterOptions? Jni { get; set; }
 
+
         [JsonPropertyName("ios")] public IosEmitterOptions? Ios { get; set; }
         [JsonPropertyName("tvos")] public TvosEmitterOptions? Tvos { get; set; }
 
@@ -38,7 +38,6 @@ namespace extgen.Options
 
         [JsonPropertyName("ios_native")] public IosEmitterOptions? IosNative { get; set; }
         [JsonPropertyName("tvos_native")] public TvosEmitterOptions? TvosNative { get; set; }
-
 
         [JsonPropertyName("docs")] public DocEmitterOptions? Docs { get; set; }
 

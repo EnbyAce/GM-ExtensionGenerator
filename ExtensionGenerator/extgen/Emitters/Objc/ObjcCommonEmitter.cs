@@ -1,13 +1,10 @@
 ﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
-using extgen.Emitters.Swift;
 using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.TypeSystem;
 using extgen.Utils;
-using Google.FlatBuffers;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace extgen.Emitters.Objc
 {
@@ -23,6 +20,9 @@ namespace extgen.Emitters.Objc
         public void EmitInternal(IrCompilation c, ObjcLayout layout) 
         {
             var platform = ctx.Options.Platform;
+
+            bridge.EmitWire(layout);
+
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{c.Name}Internal_{platform}.h", w => EmitInternalHeader(ctx, c, w));
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{c.Name}Internal_{platform}.mm", w => EmitInternalImpl(ctx, c, w));
         }

@@ -18,6 +18,11 @@ namespace extgen.Bridge.Objc
     /// </summary>
     internal sealed class ObjcBridge(IIrTypeEnumResolver enums) : IAppleBridge
     {
+        public void EmitWire(ObjcLayout layout)
+        {
+            // Do nothing here this is just for Swift extensions
+        }
+
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
         {
             var ext = ctx.ExtName;
