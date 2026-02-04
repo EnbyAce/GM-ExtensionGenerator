@@ -47,7 +47,7 @@ namespace extgen.Emitters.Cmake
 
                 // Binaries
                 ["EXTGEN_BINARY_OUTPUT"] = ctx.Config.Cpp?.OutputBinaryFolder ?? "../",
-                ["EXTGEN_ANDROID_OUTPUT"] = ctx.Config.Java?.OutputFolder ?? "../AndroidSource/"
+                ["EXTGEN_ANDROID_OUTPUT"] = ctx.Config.Jni?.OutputFolder ?? "../AndroidSource/"
             });
         }
 

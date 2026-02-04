@@ -6,11 +6,8 @@ namespace extgen.Options
     {
         [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
 
-        [JsonPropertyName("outputJavaFolder")]
-        public string OutputJavaFolder { get; set; } = "../AndroidSource/Java";
-
-        [JsonPropertyName("outputBinaryFolder")]
-        public string OutputBinaryFolder { get; set; } = "../AndroidSource/libs";
+        [JsonPropertyName("outputFolder")]
+        public string OutputFolder { get; set; } = "../AndroidSource/";
 
         public string OutputNativeFolder => "./code_gen/android";
     }

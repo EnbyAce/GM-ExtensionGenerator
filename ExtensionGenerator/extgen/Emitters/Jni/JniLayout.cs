@@ -12,7 +12,7 @@ namespace extgen.Emitters.Jni
 
         public JniLayout(string root, JniEmitterOptions opts)
         {
-            JavaBaseDir = Path.GetFullPath(Path.Combine(opts.OutputJavaFolder, "Java"), root);
+            JavaBaseDir = Path.GetFullPath(Path.Combine(opts.OutputFolder, "Java"), root);
             NativeCodeGenDir = Path.GetFullPath(opts.OutputNativeFolder, root);
 
             if (Directory.Exists(NativeCodeGenDir)) Directory.Delete(NativeCodeGenDir, true);
