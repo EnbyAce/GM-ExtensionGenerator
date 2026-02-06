@@ -1,22 +1,26 @@
-﻿using extgen.Emitters;
+﻿using extgen.Config;
+using extgen.Config.Targets.Mobile;
+using extgen.Emitters;
+using extgen.Emitters.Android.Java;
+using extgen.Emitters.Android.Jni;
+using extgen.Emitters.Android.Kotlin;
+using extgen.Emitters.AppleMobile;
+using extgen.Emitters.AppleMobile.Objc;
+using extgen.Emitters.AppleMobile.ObjcNative;
+using extgen.Emitters.AppleMobile.Swift;
 using extgen.Emitters.Cmake;
 using extgen.Emitters.Cpp;
 using extgen.Emitters.Doc;
 using extgen.Emitters.Gml;
-using extgen.Emitters.GmlRuntime;
-using extgen.Emitters.Java;
-using extgen.Emitters.Jni;
-using extgen.Emitters.Kotlin;
-using extgen.Emitters.Objc;
-using extgen.Emitters.ObjcNative;
-using extgen.Emitters.Swift;
 using extgen.Emitters.Yy;
 using extgen.Model;
-using extgen.Options;
+using extgen.Options.Android;
 using extgen.Parsing.Gmidl;
 using NDesk.Options;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Schema;
 using System.Text.Json.Serialization;
 
 namespace extgen
@@ -28,18 +32,29 @@ namespace extgen
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Converters =
+            {
+                new JsonStringEnumConverter()
+            }
         };
 
         public static int Main(string[] args)
         {
             string? configPath = null;
+            string? initDir = null;
             bool showHelp = false;
 
             var options = new OptionSet {
                 { "c|config=", "Path to JSON config file.", v => configPath = v },
+                { "i|init=", "Initialize a new config + schema in the given folder.", v => initDir = v },
                 { "h|help",    "Show help.", v => showHelp = v != null }
             };
+
+            if (!string.IsNullOrWhiteSpace(initDir))
+            {
+                return InitProject(initDir);
+            }
 
             try
             {
@@ -97,8 +112,23 @@ namespace extgen
                 return 3;
             }
 
+            try
+            {
+                EnsureSchemaBesideConfigAndPatchConfigJson(fullConfigPath);
+            }
+            catch (JsonException je)
+            {
+                Console.Error.WriteLine($"Config JSON error while patching schema: {je.Message}");
+                return 11;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to write schema/patch config: {ex}");
+                return 12;
+            }
+
             var json = File.ReadAllText(fullConfigPath, Encoding.UTF8);
-            var cfg = JsonSerializer.Deserialize<CodegenConfig>(json, jsonSerializerOptions)
+            var cfg = JsonSerializer.Deserialize<ExtGenConfig>(json, jsonSerializerOptions)
                       ?? throw new JsonException("Empty or invalid configuration.");
 
             var baseDir = Path.GetDirectoryName(fullConfigPath)!;
@@ -131,7 +161,7 @@ namespace extgen
 
             var emitters = BuildEmittersFromConfig(cfg);
 
-            var cmakeEmitter = new CmakeEmitter(cfg, emitters);
+            var cmakeEmitter = new CmakeEmitter(cfg);
             cmakeEmitter.Emit(compilation, outputDir);
 
             if (emitters.Count == 0)
@@ -166,36 +196,197 @@ namespace extgen
                 : Path.GetFullPath(Path.Combine(baseDir, expanded));
         }
 
-        private static Dictionary<string, IIrEmitter> BuildEmittersFromConfig(CodegenConfig options)
+        private static Dictionary<string, IIrEmitter> BuildEmittersFromConfig(ExtGenConfig cfg)
         {
+            var plan = new EmitterPlan { Cfg = cfg };
+            plan.Validate();
+
             var emitters = new Dictionary<string, IIrEmitter>(StringComparer.OrdinalIgnoreCase);
 
-            if (options.Cpp is { Enabled: true }) emitters["cpp"] = new CppEmitter(options.Cpp, options.Runtime);
-            if (options.Gml is { Enabled: true }) emitters["gml"] = new GmlEmitter(options.Gml);
-            if (options.Yy is { Enabled: true }) emitters["yy"] = new YyEmitter(options.Yy, options.Runtime);
+            AddCoreEmitters(emitters, plan);
+            AddBindingEmitters(emitters, plan);
 
-            // Only do one or the other (Java / JNI)
-            if (options.Kotlin is { Enabled: true }) emitters["android"] = new KotlinEmitter(options.Kotlin, options.Runtime);
-            if (options.Java is { Enabled: true }) emitters["android"] = new JavaEmitter(options.Java, options.Runtime);
-            if (options.Jni is { Enabled: true }) emitters["android"] = new JniEmitter(options.Jni, options.Runtime);
+            AddAndroidEmitter(emitters, plan);
+            AddIosEmitter(emitters, plan);
+            AddTvosEmitter(emitters, plan);
 
-            // Only do one or the other (Objc or Swift or Native)
-            if (options.Ios is { Enabled: true }) emitters["ios"] = new ObjcEmitter(options.Ios, options.Runtime);
-            if (options.IosSwift is { Enabled: true }) emitters["ios"] = new SwiftEmitter(options.IosSwift, options.Runtime);
-            if (options.IosNative is { Enabled: true }) emitters["ios"] = new ObjcNativeEmitter(options.IosNative, options.Runtime);
-
-            // Only do one or the other (Objc or Swift or Native)
-            if (options.Tvos is { Enabled: true }) emitters["tvos"] = new ObjcEmitter(options.Tvos, options.Runtime);
-            if (options.TvosSwift is { Enabled: true }) emitters["tvos"] = new SwiftEmitter(options.TvosSwift, options.Runtime);
-            if (options.TvosNative is { Enabled: true }) emitters["tvos"] = new ObjcNativeEmitter(options.TvosNative, options.Runtime);
-
-            // Generate documentation
-            if (options.Docs is { Enabled: true }) emitters["docs"] = new DocEmitter(options.Docs, options.Runtime);
-
-            // Emit the ExtensionCore runtime
-            if (options.GmlRuntime is { Enabled: true }) emitters["gml_runtime"] = new GmlRuntimeEmitter(options.GmlRuntime);
+            AddDocsEmitter(emitters, plan);
 
             return emitters;
+        }
+
+        private static void AddCoreEmitters(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (!plan.NeedsCpp) return;
+
+            // Build cpp options from target config (as you already do)
+            var cppEmitterOptions = new CppEmitterOptions
+            {
+                SourceFilename = plan.Cfg.Targets.SourceFilename,
+                SourceFolder = plan.Cfg.Targets.SourceFolder
+            };
+
+            emitters["cpp"] = new CppEmitter(cppEmitterOptions, plan.Cfg.Runtime);
+        }
+
+        private static void AddBindingEmitters(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (!plan.AllowBindings) return;
+
+            if (plan.Cfg.Gml is { Enabled: true } g)
+            {
+                var gmlOpts = GmlEmitterOptions.FromConfig(g);
+                emitters["gml"] = new GmlEmitter(gmlOpts);
+
+                // If YY generation is conceptually “part of bindings”, keep it here
+                var yyOpts = YyEmitterOptions.FromConfig(g);
+                emitters["yy"] = new YyEmitter(yyOpts, plan.Cfg.Runtime);
+            }
+        }
+
+        private static void AddAndroidEmitter(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (plan.Cfg.Targets.Android is not AndroidTargetConfig { Enabled: true } androidCfg)
+                return;
+
+            var androidOpts = AndroidEmitterOptions.FromConfig(androidCfg);
+
+            emitters["android"] = plan.AndroidMode switch
+            {
+                AndroidMode.Kotlin => new KotlinEmitter(androidOpts, plan.Cfg.Runtime),
+                AndroidMode.Java => new JavaEmitter(androidOpts, plan.Cfg.Runtime),
+                AndroidMode.Jni => new JniEmitter(androidOpts, plan.Cfg.Runtime),
+                _ => throw new ArgumentOutOfRangeException(nameof(plan.AndroidMode), plan.AndroidMode, "Unknown AndroidMode")
+            };
+        }
+
+        private static void AddIosEmitter(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (plan.Cfg.Targets.Ios is not IosTargetConfig { Enabled: true } iosCfg)
+                return;
+
+            var iosOpts = IosEmitterOptions.FromConfig(iosCfg);
+
+            emitters["ios"] = plan.IosMode switch
+            {
+                AppleMobileMode.Objc => new ObjcEmitter(iosOpts, plan.Cfg.Runtime),
+                AppleMobileMode.Swift => new SwiftEmitter(iosOpts, plan.Cfg.Runtime),
+                AppleMobileMode.Native => new ObjcNativeEmitter(iosOpts, plan.Cfg.Runtime),
+                _ => throw new ArgumentOutOfRangeException(nameof(plan.IosMode), plan.IosMode, "Unknown AppleMobileMode")
+            };
+        }
+
+        private static void AddTvosEmitter(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (plan.Cfg.Targets.Tvos is not TvosTargetConfig { Enabled: true } tvosCfg)
+                return;
+
+            var tvosOpts = TvosEmitterOptions.FromConfig(tvosCfg);
+
+            emitters["tvos"] = plan.TvosMode switch
+            {
+                AppleMobileMode.Objc => new ObjcEmitter(tvosOpts, plan.Cfg.Runtime),
+                AppleMobileMode.Swift => new SwiftEmitter(tvosOpts, plan.Cfg.Runtime),
+                AppleMobileMode.Native => new ObjcNativeEmitter(tvosOpts, plan.Cfg.Runtime),
+                _ => throw new ArgumentOutOfRangeException(nameof(plan.TvosMode), plan.TvosMode, "Unknown AppleMobileMode")
+            };
+        }
+
+        private static void AddDocsEmitter(Dictionary<string, IIrEmitter> emitters, EmitterPlan plan)
+        {
+            if (plan.Cfg.Extras.Docs is not { Enabled: true } d) return;
+
+            var docOpts = DocEmitterOptions.FromConfig(d);
+            emitters["docs"] = new DocEmitter(docOpts, plan.Cfg.Runtime);
+        }
+
+        private static int InitProject(string folder)
+        {
+            try
+            {
+                var outDir = Path.GetFullPath(folder);
+                Directory.CreateDirectory(outDir);
+
+                var schemaFileName = "extgen.schema.json";
+                var configFileName = "config.json";
+
+                var schemaPath = Path.Combine(outDir, schemaFileName);
+                var configPath = Path.Combine(outDir, configFileName);
+
+                JsonNode schema = JsonSerializerOptions.Default.GetJsonSchemaAsNode(typeof(ExtGenConfig));
+                File.WriteAllText(schemaPath, schema.ToString(), Encoding.UTF8);
+
+                // 2) Create default config
+                var cfg = new ExtGenConfig
+                {
+                    Schema = $"./{schemaFileName}",
+                    Input = "./input.gmidl"
+                };
+
+                var json = JsonSerializer.Serialize(cfg, jsonSerializerOptions);
+                File.WriteAllText(configPath, json, Encoding.UTF8);
+
+                Console.WriteLine($"[extgen] Wrote: {configPath}");
+                Console.WriteLine($"[extgen] Wrote: {schemaPath}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.ToString());
+                return 98;
+            }
+        }
+
+        private static void EnsureSchemaBesideConfigAndPatchConfigJson(string fullConfigPath, string schemaFileName = "extgen.schema.json")
+        {
+            var cfgDir = Path.GetDirectoryName(fullConfigPath)!;
+            Directory.CreateDirectory(cfgDir);
+
+            var schemaPath = Path.Combine(cfgDir, schemaFileName);
+            var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+            // 1) Write schema file
+            JsonNode schema = JsonSerializerOptions.Default.GetJsonSchemaAsNode(typeof(ExtGenConfig));
+            File.WriteAllText(schemaPath, schema.ToString(), encoding);
+
+            // 2) Patch config.json to include/overwrite $schema
+            var raw = File.ReadAllText(fullConfigPath, Encoding.UTF8);
+
+            // Use JsonNode to preserve unknown properties
+            JsonNode? node;
+            try
+            {
+                node = JsonNode.Parse(raw, new JsonNodeOptions
+                {
+                    PropertyNameCaseInsensitive = false
+                });
+            }
+            catch (JsonException)
+            {
+                // If config is invalid JSON, still emit schema but don't modify config
+                throw;
+            }
+
+            if (node is not JsonObject obj)
+                throw new JsonException("Config root must be a JSON object.");
+
+            // Use a relative schema path so repo moves nicely
+            obj["$schema"] = $"./{schemaFileName}";
+
+            // Re-emit with indentation (you *will* lose comments; JSON can't keep them)
+            var patched = obj.ToJsonString(new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            var desired = $"./{schemaFileName}";
+            var current = obj["$schema"]?.GetValue<string>();
+
+            if (!string.Equals(current, desired, StringComparison.Ordinal))
+            {
+                obj["$schema"] = desired;
+                File.WriteAllText(fullConfigPath, patched, encoding);
+            }
         }
     }
 }

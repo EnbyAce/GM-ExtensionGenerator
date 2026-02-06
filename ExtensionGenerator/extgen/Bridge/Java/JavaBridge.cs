@@ -1,7 +1,8 @@
-﻿using extgen.Emitters.Java;
+﻿using extgen.Config;
+using extgen.Emitters.Android.Java;
 using extgen.Emitters.Utils;
 using extgen.Model;
-using extgen.Options;
+using extgen.Options.Android;
 using extgen.TypeSystem;
 
 namespace extgen.Bridge.Java
@@ -12,7 +13,7 @@ namespace extgen.Bridge.Java
         JavaWireHelpers wireHelpers
     ) : JavaBridgeGenerator(types, runtime, wireHelpers)
     {
-        protected override string GetTargetExpression(IEmitterContext<JavaEmitterOptions> ctx, IrFunction fn)
+        protected override string GetTargetExpression(IEmitterContext<AndroidEmitterOptions> ctx, IrFunction fn)
             => fn.Name;
 
         // Backing field / hooks remain default (no-op).

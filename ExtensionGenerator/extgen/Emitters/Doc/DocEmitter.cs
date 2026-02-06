@@ -1,8 +1,8 @@
 ﻿using codegencore.Model;
 using codegencore.Writers;
 using codegencore.Writers.Concrete;
+using extgen.Config;
 using extgen.Model;
-using extgen.Options;
 using System.Collections.Immutable;
 using System.Text;
 

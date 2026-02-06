@@ -1,5 +1,5 @@
 ﻿using codegencore.Writers.Lang;
-using extgen.Emitters.Objc;
+using extgen.Emitters.AppleMobile.Objc;
 using extgen.Model;
 using extgen.TypeSystem;
 using extgen.TypeSystem.Cpp;

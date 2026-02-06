@@ -1,21 +1,23 @@
-﻿using extgen.Options;
-
-namespace extgen.Emitters.Gml
+﻿namespace extgen.Emitters.Gml
 {
     internal sealed class GmlLayout
     {
         public string OutputFile { get; }
         public string OutputFolder { get; }
 
+        public string RuntimeOutputFile { get; }
+        public string RuntimeOutputFolder { get; }
+
         public GmlLayout(string root, GmlEmitterOptions options)
         {
-            var fullpath = Path.GetFullPath(options.OutputFile, root);
+            var apiOutput = Path.GetFullPath(options.OutputFile, root);
 
-            if (!File.Exists(fullpath))
-                throw new ArgumentException($"GML Emitter: output file path doesn't exist ({fullpath}).");
+            OutputFile = Path.GetFileNameWithoutExtension(apiOutput);
+            OutputFolder = Path.GetDirectoryName(apiOutput) ?? root;
 
-            OutputFile = Path.GetFileNameWithoutExtension(fullpath);
-            OutputFolder = Path.GetDirectoryName(fullpath) ?? root;
+            var runtimeOutput = Path.GetFullPath(options.RuntimeFile, root);
+            RuntimeOutputFile = Path.GetFileNameWithoutExtension(runtimeOutput);
+            RuntimeOutputFolder = Path.GetDirectoryName(runtimeOutput) ?? root;
         }
     }
 }

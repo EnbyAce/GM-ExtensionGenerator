@@ -42,14 +42,20 @@
       "displayName": "Windows x64 Debug",
       "hidden": ${EXTGEN_WINDOWS_DISABLED},
       "inherits": "base-vs",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDebugDLL" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDebugDLL",
+        "EXT_OUTPUT_DIR": "${EXTGEN_WINDOWS_OUTPUT_FOLDER}"
+      }
     },
     {
       "name": "win-x64-release",
       "displayName": "Windows x64 Release",
       "hidden": ${EXTGEN_WINDOWS_DISABLED},
       "inherits": "base-vs",
-      "cacheVariables": { "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL" }
+      "cacheVariables": {
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL",
+        "EXT_OUTPUT_DIR": "${EXTGEN_WINDOWS_OUTPUT_FOLDER}"
+      }
     },
 
 
@@ -62,7 +68,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
-        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64"
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "EXT_OUTPUT_DIR": "${EXTGEN_MACOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -74,7 +81,8 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
-        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64"
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "EXT_OUTPUT_DIR": "${EXTGEN_MACOS_OUTPUT_FOLDER}"
       }
     },
 
@@ -104,7 +112,8 @@
         "CMAKE_SYSTEM_NAME": "iOS",
         "EXT_APPLE_PACKAGE_CONFIG": "Release",
         "EXT_APPLE_NATIVE_FRAMEWORK": "OFF",
-        "EXT_APPLE_SIM_X86_64": "OFF"
+        "EXT_APPLE_SIM_X86_64": "OFF",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_IOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -116,7 +125,8 @@
         "CMAKE_SYSTEM_NAME": "iOS",
         "EXT_APPLE_PACKAGE_CONFIG": "Debug",
         "EXT_APPLE_NATIVE_FRAMEWORK": "OFF",
-        "EXT_APPLE_SIM_X86_64": "OFF"
+        "EXT_APPLE_SIM_X86_64": "OFF",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_IOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -125,7 +135,8 @@
       "hidden": ${EXTGEN_IOS_NATIVE_DISABLED},
       "inherits": "ios-xcframework-release",
       "cacheVariables": {
-        "EXT_APPLE_NATIVE_FRAMEWORK": "ON"
+        "EXT_APPLE_NATIVE_FRAMEWORK": "ON",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_IOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -134,7 +145,8 @@
       "hidden": ${EXTGEN_IOS_NATIVE_DISABLED},
       "inherits": "ios-xcframework-debug",
       "cacheVariables": {
-        "EXT_APPLE_NATIVE_FRAMEWORK": "ON"
+        "EXT_APPLE_NATIVE_FRAMEWORK": "ON",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_IOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -146,7 +158,8 @@
         "CMAKE_SYSTEM_NAME": "tvOS",
         "EXT_APPLE_PACKAGE_CONFIG": "Release",
         "EXT_APPLE_NATIVE_FRAMEWORK": "OFF",
-        "EXT_APPLE_SIM_X86_64": "OFF"
+        "EXT_APPLE_SIM_X86_64": "OFF",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_TVOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -158,7 +171,8 @@
         "CMAKE_SYSTEM_NAME": "tvOS",
         "EXT_APPLE_PACKAGE_CONFIG": "Debug",
         "EXT_APPLE_NATIVE_FRAMEWORK": "OFF",
-        "EXT_APPLE_SIM_X86_64": "OFF"
+        "EXT_APPLE_SIM_X86_64": "OFF",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_TVOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -167,7 +181,8 @@
       "hidden": ${EXTGEN_TVOS_NATIVE_DISABLED},
       "inherits": "tvos-xcframework-release",
       "cacheVariables": {
-        "EXT_APPLE_NATIVE_FRAMEWORK": "ON"
+        "EXT_APPLE_NATIVE_FRAMEWORK": "ON",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_TVOS_OUTPUT_FOLDER}"
       }
     },
     {
@@ -176,7 +191,8 @@
       "hidden": ${EXTGEN_TVOS_NATIVE_DISABLED},
       "inherits": "tvos-xcframework-debug",
       "cacheVariables": {
-        "EXT_APPLE_NATIVE_FRAMEWORK": "ON"
+        "EXT_APPLE_NATIVE_FRAMEWORK": "ON",
+        "EXT_APPLE_DROP_DIR": "${EXTGEN_TVOS_OUTPUT_FOLDER}"
       }
     },
 
@@ -189,7 +205,10 @@
       "inherits": "base-ninja",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
       "environment": { "CC": "clang", "CXX": "clang++" },
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "EXT_OUTPUT_DIR": "${EXTGEN_LINUX_OUTPUT_FOLDER}"
+      }
     },
     {
       "name": "linux-clang-x64-release",
@@ -198,7 +217,10 @@
       "inherits": "base-ninja",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
       "environment": { "CC": "clang", "CXX": "clang++" },
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "EXT_OUTPUT_DIR": "${EXTGEN_LINUX_OUTPUT_FOLDER}"
+      }
     },
 
 
@@ -212,7 +234,8 @@
         "ANDROID_PLATFORM": "21",
         "ANDROID_STL": "c++_static",
         "BUILD_SHARED_LIBS": "ON",
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "EXT_ANDROID_OUTPUT_DIR": "${EXTGEN_ANDROID_OUTPUT_FOLDER}"
       }
     },
     {
@@ -225,7 +248,8 @@
         "ANDROID_PLATFORM": "21",
         "ANDROID_STL": "c++_static",
         "BUILD_SHARED_LIBS": "ON",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "EXT_ANDROID_OUTPUT_DIR": "${EXTGEN_ANDROID_OUTPUT_FOLDER}"
       }
     },
 
@@ -280,28 +304,32 @@
       "displayName": "Xbox Series (Scarlett) Debug",
       "hidden": ${EXTGEN_XBOX_DISABLED},
       "inherits": "base-vs",
-      "architecture": { "value": "Gaming.Xbox.Scarlett.x64" }
+      "architecture": { "value": "Gaming.Xbox.Scarlett.x64" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_XBOX_OUTPUT_FOLDER}" }
     },
     {
       "name": "xbox-scarlett-release",
       "displayName": "Xbox Series (Scarlett) Release",
       "hidden": ${EXTGEN_XBOX_DISABLED},
       "inherits": "base-vs",
-      "architecture": { "value": "Gaming.Xbox.Scarlett.x64" }
+      "architecture": { "value": "Gaming.Xbox.Scarlett.x64" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_XBOX_OUTPUT_FOLDER}" }
     },
     {
       "name": "xbox-one-debug",
       "displayName": "Xbox One Debug",
       "hidden": ${EXTGEN_XBOX_DISABLED},
       "inherits": "base-vs",
-      "architecture": { "value": "Gaming.Xbox.XboxOne.x64" }
+      "architecture": { "value": "Gaming.Xbox.XboxOne.x64" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_XBOX_OUTPUT_FOLDER}" }
     },
     {
       "name": "xbox-one-release",
       "displayName": "Xbox One Release",
       "hidden": ${EXTGEN_XBOX_DISABLED},
       "inherits": "base-vs",
-      "architecture": { "value": "Gaming.Xbox.XboxOne.x64" }
+      "architecture": { "value": "Gaming.Xbox.XboxOne.x64" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_XBOX_OUTPUT_FOLDER}" }
     },
 
     {
@@ -318,14 +346,16 @@
       "displayName": "PlayStation 4 (ORBIS) Debug",
       "hidden": ${EXTGEN_PS4_DISABLED},
       "inherits": "ps-base-vs",
-      "architecture": { "value": "ORBIS" }
+      "architecture": { "value": "ORBIS" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_PS4_OUTPUT_FOLDER}" }
     },
     {
       "name": "ps4-release",
       "displayName": "PlayStation 4 (ORBIS) Release",
       "hidden": ${EXTGEN_PS4_DISABLED},
       "inherits": "ps-base-vs",
-      "architecture": { "value": "ORBIS" }
+      "architecture": { "value": "ORBIS" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_PS4_OUTPUT_FOLDER}" }
     },
 
     {
@@ -333,14 +363,16 @@
       "displayName": "PlayStation 5 (Prospero) Debug",
       "hidden": ${EXTGEN_PS5_DISABLED},
       "inherits": "ps-base-vs",
-      "architecture": { "value": "Prospero" }
+      "architecture": { "value": "Prospero" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_PS5_OUTPUT_FOLDER}" }
     },
     {
       "name": "ps5-release",
       "displayName": "PlayStation 5 (Prospero) Release",
       "hidden": ${EXTGEN_PS5_DISABLED},
       "inherits": "ps-base-vs",
-      "architecture": { "value": "Prospero" }
+      "architecture": { "value": "Prospero" },
+      "cacheVariables": { "EXT_OUTPUT_DIR": "${EXTGEN_PS5_OUTPUT_FOLDER}" }
     },
 
     {
@@ -354,7 +386,8 @@
         "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
 
         "EXTGEN_PLATFORM_SWITCH": "ON",
-        "EXT_SWITCH_USER_PROPS": "$env{EXT_SWITCH_USER_PROPS}"
+        "EXT_SWITCH_USER_PROPS": "$env{EXT_SWITCH_USER_PROPS}",
+        "EXT_OUTPUT_DIR": "${EXTGEN_SWITCH_OUTPUT_FOLDER}"
       }
     },
     {

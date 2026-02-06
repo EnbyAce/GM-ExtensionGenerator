@@ -1,7 +1,7 @@
 ﻿using codegencore.Model;
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
-using extgen.Emitters.Objc;
+using extgen.Emitters.AppleMobile.Objc;
 using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.TypeSystem;

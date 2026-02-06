@@ -1,10 +1,9 @@
 ﻿using codegencore.Model;
 using codegencore.Writers.Lang;
+using extgen.Emitters.AppleMobile.Objc;
 using extgen.Emitters.Cpp;
-using extgen.Emitters.Objc;
 using extgen.Model;
 using extgen.Model.Utils;
-using extgen.Options;
 using extgen.TypeSystem;
 using extgen.TypeSystem.Cpp;
 
@@ -49,9 +48,10 @@ namespace extgen.Bridge.Objc
 
         public void EmitMethodBody(ObjcEmitterContext ctx, ObjcWriter fnBody, IrFunction fn)
         {
-            var cppTypeMap = new CppTypeMap(ctx.Runtime);
+            CppTypeMap cppTypeMap = new(ctx.Runtime);
+            CppEmitterOptions cppEmitterOptions = new() { SourceFilename = ctx.Options.SourceFilename, SourceFolder = ctx.Options.SourceFilename };
 
-            CppEmitterContext cppCtx = new(ctx.ExtName, new CppEmitterOptions(), ctx.Runtime);
+            CppEmitterContext cppCtx = new(ctx.ExtName, cppEmitterOptions, ctx.Runtime);
             CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, cppTypeMap, enums);
 
             // 1) decode (reused helper)
@@ -95,7 +95,8 @@ namespace extgen.Bridge.Objc
             CppCommonEmitter<ObjcWriter>.EmitCommonIncludes(w);
             w.Include("GMExtWire.h", false).Line();
 
-            CppEmitterContext cppCtx = new(ctx.ExtName, new CppEmitterOptions(), ctx.Runtime);
+            CppEmitterOptions cppEmitterOptions = new() { SourceFilename = ctx.Options.SourceFilename, SourceFolder = ctx.Options.SourceFilename };
+            CppEmitterContext cppCtx = new(ctx.ExtName, cppEmitterOptions, ctx.Runtime);
             CppCommonEmitter<ObjcWriter> commmon = new(cppCtx, new CppTypeMap(ctx.Runtime), enums);
             commmon.EmitCommonCppArtifacts(w, c);
         }

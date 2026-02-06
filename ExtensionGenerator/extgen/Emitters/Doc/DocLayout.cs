@@ -1,6 +1,4 @@
-﻿using extgen.Options;
-
-namespace extgen.Emitters.Doc
+﻿namespace extgen.Emitters.Doc
 {
     internal sealed class DocLayout
     {

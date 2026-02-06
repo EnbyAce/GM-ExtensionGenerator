@@ -1,4 +1,4 @@
-﻿using extgen.Options;
+﻿using extgen.Config;
 
 namespace extgen.Emitters.Utils
 {

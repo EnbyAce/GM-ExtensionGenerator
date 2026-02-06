@@ -7,24 +7,41 @@ if(NOT DEFINED PROJECT_NAME OR NOT DEFINED SRC_DIR)
   message(FATAL_ERROR "PROJECT_NAME and SRC_DIR are required")
 endif()
 
-# Prefer headers passed in from the custom target (script mode has no cache),
-# fall back to EXT_PUBLIC_HEADERS_* only if PUBLIC_HEADERS wasn't passed.
+# Default drop if not provided
+if(NOT DEFINED EXT_APPLE_DROP_DIR)
+  set(EXT_APPLE_DROP_DIR "")
+endif()
+
+# Normalize DROP_DIR:
+# - empty => use platform default under SRC_DIR/../<PlatformSourceFromMac>
+# - relative => relative to SRC_DIR
+# - absolute => use as-is
 if(PLATFORM STREQUAL "ios")
   if(NOT DEFINED PUBLIC_HEADERS OR PUBLIC_HEADERS STREQUAL "")
     set(PUBLIC_HEADERS "${EXT_PUBLIC_HEADERS_IOS}")
   endif()
   set(SDK_DEVICE "iphoneos")
   set(SDK_SIM "iphonesimulator")
-  set(DROP_DIR "${SRC_DIR}/${EXTGEN_IOS_OUTPUT}")
+  # Use the defalut in case something goes wrong
+  set(_DEFAULT_DROP_DIR "${SRC_DIR}/../iOSSourceFromMac")
 elseif(PLATFORM STREQUAL "tvos")
   if(NOT DEFINED PUBLIC_HEADERS OR PUBLIC_HEADERS STREQUAL "")
     set(PUBLIC_HEADERS "${EXT_PUBLIC_HEADERS_TVOS}")
   endif()
   set(SDK_DEVICE "appletvos")
   set(SDK_SIM "appletvsimulator")
-  set(DROP_DIR "${SRC_DIR}/${EXTGEN_TVOS_OUTPUT}")
+  # Use the defalut in case something goes wrong
+  set(_DEFAULT_DROP_DIR "${SRC_DIR}/../tvOSSourceFromMac")
 else()
   message(FATAL_ERROR "Unknown PLATFORM=${PLATFORM}")
+endif()
+
+if(EXT_APPLE_DROP_DIR STREQUAL "")
+  set(DROP_DIR "${_DEFAULT_DROP_DIR}")
+elseif(IS_ABSOLUTE "${EXT_APPLE_DROP_DIR}")
+  set(DROP_DIR "${EXT_APPLE_DROP_DIR}")
+else()
+  get_filename_component(DROP_DIR "${SRC_DIR}/${EXT_APPLE_DROP_DIR}" ABSOLUTE)
 endif()
 
 if(NOT DEFINED PUBLIC_HEADERS OR PUBLIC_HEADERS STREQUAL "")

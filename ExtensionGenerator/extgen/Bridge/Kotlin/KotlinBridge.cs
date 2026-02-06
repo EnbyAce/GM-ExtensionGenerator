@@ -1,9 +1,10 @@
 ﻿using codegencore.Writers.Lang;
 using extgen.Bridge.Java;
-using extgen.Emitters.Java;
+using extgen.Config;
+using extgen.Emitters.Android.Java;
 using extgen.Emitters.Utils;
 using extgen.Model;
-using extgen.Options;
+using extgen.Options.Android;
 using extgen.TypeSystem;
 
 namespace extgen.Bridge.Kotlin
@@ -14,7 +15,7 @@ namespace extgen.Bridge.Kotlin
         JavaWireHelpers wireHelpers
     ) : JavaBridgeGenerator(types, runtime, wireHelpers)
     {
-        public override void EmitBackingField(IEmitterContext<JavaEmitterOptions> ctx, JavaWriter w)
+        public override void EmitBackingField(IEmitterContext<AndroidEmitterOptions> ctx, JavaWriter w)
         {
             var ext = ctx.ExtName;
             w.Field(
@@ -25,10 +26,10 @@ namespace extgen.Bridge.Kotlin
             ).Line();
         }
 
-        protected override string GetTargetExpression(IEmitterContext<JavaEmitterOptions> ctx, IrFunction fn)
+        protected override string GetTargetExpression(IEmitterContext<AndroidEmitterOptions> ctx, IrFunction fn)
             => $"__kotlin_instance.{fn.Name}";
 
-        public override string[]? GetClassImplements(IEmitterContext<JavaEmitterOptions> ctx)
+        public override string[]? GetClassImplements(IEmitterContext<AndroidEmitterOptions> ctx)
             => null;
     }
 }

@@ -1,6 +1,6 @@
 ﻿using codegencore.Writers.Lang;
+using extgen.Config;
 using extgen.Model;
-using extgen.Options;
 
 namespace extgen.Emitters.Utils
 {

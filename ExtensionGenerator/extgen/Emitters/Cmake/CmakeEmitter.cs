@@ -1,11 +1,14 @@
-﻿using extgen.Emitters.ObjcNative;
+﻿using extgen.Config;
+using extgen.Config.Targets.Consoles;
+using extgen.Config.Targets.Desktop;
+using extgen.Config.Targets.Mobile;
 using extgen.Model;
-using extgen.Options;
 using extgen.Utils;
+using Microsoft.VisualBasic.FileIO;
 
 namespace extgen.Emitters.Cmake
 {
-    internal class CmakeEmitter(CodegenConfig options, Dictionary<string, IIrEmitter> emitters) : IIrEmitter
+    internal class CmakeEmitter(ExtGenConfig options) : IIrEmitter
     {
         public void Emit(IrCompilation comp, string outputDir)
         {
@@ -25,7 +28,8 @@ namespace extgen.Emitters.Cmake
 
             EmitThirdParty(layout);
 
-            EmitCmakePresets(ctx, layout);
+            if (ctx.Options.EmitPresets)
+                EmitCmakePresets(ctx, layout);
 
             EmitExtras(layout);
         }
@@ -38,16 +42,12 @@ namespace extgen.Emitters.Cmake
                 ["EXTGEN_EXTENSION_NAME"] = ctx.ExtName,
 
                 // Cpp
-                ["EXTGEN_CPP_VERSION"] = $"{ctx.Options.CppVersion}",
+                ["EXTGEN_CPP_VERSION"] = $"{ctx.Options.CppStandard}",
                 ["EXTGEN_CPP_EXTENSIONS"] = ctx.Options.CppExtensions ? "ON" : "OFF",
 
                 // Config
                 ["EXTGEN_USE_THIRD_PARTY"] = ctx.Options.UseThirdParty ? "ON" : "OFF",
                 ["EXTGEN_STRICT_WARNINGS"] = ctx.Options.StrictWarnings ? "ON" : "OFF",
-
-                // Binaries
-                ["EXTGEN_BINARY_OUTPUT"] = ctx.Config.Cpp?.OutputBinaryFolder ?? "../",
-                ["EXTGEN_ANDROID_OUTPUT"] = ctx.Config.Jni?.OutputFolder ?? "../AndroidSource/"
             });
         }
 
@@ -66,8 +66,8 @@ namespace extgen.Emitters.Cmake
             ResourceWriter.WriteTemplatedTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.cmake.extgen_package_xcframework.cmake", Path.Combine(layout.ScriptsDir, "extgen_package_xcframework.cmake"), new Dictionary<string, string>
             {
                 // Frameworks
-                ["EXTGEN_IOS_OUTPUT"] = ctx.Config.Ios?.OutputFolder ?? ctx.Config.IosSwift?.OutputFolder ?? ctx.Config.IosNative?.OutputFolder ?? "../iOSSourceFromMac",
-                ["EXTGEN_TVOS_OUTPUT"] = ctx.Config.Tvos?.OutputFolder ?? ctx.Config.TvosSwift?.OutputFolder ?? ctx.Config.TvosNative?.OutputFolder ?? "../tvOSSourceFromMac",
+                ["EXTGEN_IOS_OUTPUT"] = ctx.Config.Targets.Ios?.OutputFolder ?? "../iOSSourceFromMac",
+                ["EXTGEN_TVOS_OUTPUT"] = ctx.Config.Targets.Tvos?.OutputFolder ?? "../tvOSSourceFromMac",
             });
         }
 
@@ -82,28 +82,46 @@ namespace extgen.Emitters.Cmake
 
         private void EmitCmakePresets(CmakeEmitterContext ctx, CmakeLayout layout)
         {
-            var loweredTargets = ctx.Config.Targets.Select(t => t.ToLowerInvariant()).ToList();
+            var targets = ctx.Config.Targets;
             ResourceWriter.WriteTemplatedTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.CMakePresets.json", Path.Combine(layout.RootDir, "CMakePresets.json"), new Dictionary<string, string>
             {
                 // Desktop
-                ["EXTGEN_WINDOWS_DISABLED"] = loweredTargets.Contains("windows") ? "false" : "true",
-                ["EXTGEN_MACOS_DISABLED"] = loweredTargets.Contains("macos") ? "false" : "true",
-                ["EXTGEN_LINUX_DISABLED"] = loweredTargets.Contains("linux") ? "false" : "true",
+                ["EXTGEN_WINDOWS_DISABLED"] = targets.Windows is WindowsTargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_WINDOWS_OUTPUT_FOLDER"] = targets.Windows is WindowsTargetConfig { Enabled: true } w ? w.OutputFolder : "../",
+
+                ["EXTGEN_MACOS_DISABLED"] = targets.MacOS is MacTargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_MACOS_OUTPUT_FOLDER"] = targets.MacOS is MacTargetConfig { Enabled: true } m ? m.OutputFolder : "../",
+
+                ["EXTGEN_LINUX_DISABLED"] = targets.Linux is LinuxTargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_LINUX_OUTPUT_FOLDER"] = targets.Linux is LinuxTargetConfig { Enabled: true } l ? l.OutputFolder : "../",
 
                 // Android
-                ["EXTGEN_ANDROID_DISABLED"] = loweredTargets.Contains("android") ? "false" : "true",
+                ["EXTGEN_ANDROID_DISABLED"] = targets.Android is AndroidTargetConfig { Enabled: true, Mode: AndroidMode.Jni } ? "false" : "true",
+                ["EXTGEN_ANDROID_OUTPUT_FOLDER"] = targets.Android is AndroidTargetConfig { Enabled: true } a ? a.OutputFolder : "../AndroidSource",
+
                 // iOS|tvOS (pure Objc|Swift)
-                ["EXTGEN_IOS_DISABLED"] = emitters.TryGetValue("ios", out var ios_e) ? (ios_e is not ObjcNativeEmitter ? "false" : "true") : "true",
-                ["EXTGEN_TVOS_DISABLED"] = emitters.TryGetValue("tvos", out var tvos_e) ? (tvos_e is not ObjcNativeEmitter ? "false" : "true") : "true",
+                ["EXTGEN_IOS_DISABLED"] = targets.Ios is IosTargetConfig { Enabled: true, Mode: AppleMobileMode.Objc or AppleMobileMode.Swift } ? "false" : "true",
+                ["EXTGEN_TVOS_DISABLED"] = targets.Tvos is TvosTargetConfig { Enabled: true, Mode: AppleMobileMode.Objc or AppleMobileMode.Swift } ? "false" : "true",
+
                 // iOS|tvOS (Objc wrapper)
-                ["EXTGEN_IOS_NATIVE_DISABLED"] = emitters.TryGetValue("ios", out var ios_ne) ? (ios_ne is ObjcNativeEmitter ? "false" : "true") : "true",
-                ["EXTGEN_TVOS_NATIVE_DISABLED"] = emitters.TryGetValue("tvos", out var tvos_ne) ? (tvos_ne is ObjcNativeEmitter ? "false" : "true") : "true",
+                ["EXTGEN_IOS_NATIVE_DISABLED"] = targets.Ios is IosTargetConfig { Enabled: true, Mode: AppleMobileMode.Native, Enabled: true } ? "false" : "true",
+                ["EXTGEN_TVOS_NATIVE_DISABLED"] = targets.Tvos is TvosTargetConfig { Enabled: true, Mode: AppleMobileMode.Native } ? "false" : "true",
+
+                ["EXTGEN_IOS_OUTPUT_FOLDER"] = targets.Ios is IosTargetConfig { Enabled: true } i ? i.OutputFolder : "../iOSSourceFromMac",
+                ["EXTGEN_TVOS_OUTPUT_FOLDER"] = targets.Tvos is TvosTargetConfig { Enabled: true } t ? t.OutputFolder : "../tvOSSourceFromMac",
 
                 // Console
-                ["EXTGEN_XBOX_DISABLED"] = loweredTargets.Contains("xbox") ? "false" : "true",
-                ["EXTGEN_PS4_DISABLED"] = loweredTargets.Contains("ps4") ? "false" : "true",
-                ["EXTGEN_PS5_DISABLED"] = loweredTargets.Contains("ps5") ? "false" : "true",
-                ["EXTGEN_SWITCH_DISABLED"] = loweredTargets.Contains("switch") ? "false" : "true",
+                ["EXTGEN_XBOX_DISABLED"] = targets.Xbox is XboxTargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_XBOX_OUTPUT_FOLDER"] = targets.Xbox is XboxTargetConfig { Enabled: true } x ? x.OutputFolder : "../",
+
+                ["EXTGEN_PS4_DISABLED"] = targets.Ps4 is Ps4TargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_PS4_OUTPUT_FOLDER"] = targets.Ps4 is Ps4TargetConfig { Enabled: true } ps4 ? ps4.OutputFolder : "../",
+
+                ["EXTGEN_PS5_DISABLED"] = targets.Ps5 is Ps5TargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_PS5_OUTPUT_FOLDER"] = targets.Ps5 is Ps5TargetConfig { Enabled: true } ps5 ? ps5.OutputFolder : "../",
+
+                ["EXTGEN_SWITCH_DISABLED"] = targets.Switch is SwitchTargetConfig { Enabled: true } ? "false" : "true",
+                ["EXTGEN_SWITCH_OUTPUT_FOLDER"] = targets.Switch is SwitchTargetConfig { Enabled: true } s ? s.OutputFolder : "../",
             });
         }
 

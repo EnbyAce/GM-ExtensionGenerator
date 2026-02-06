@@ -5,7 +5,6 @@ using codegencore.Writers.Lang;
 using extgen.Emitters.Doc;
 using extgen.Model;
 using extgen.Model.Utils;
-using extgen.Options;
 using extgen.Utils;
 using extgencore.Helpers;
 using System.Collections.Immutable;
@@ -33,9 +32,13 @@ namespace extgen.Emitters.Gml
 
             var enums = new IrTypeEnumResolver(comp.Enums);
 
-
-
             FileEmitHelpers.WriteGml(layout.OutputFolder, $"{layout.OutputFile}.gml", w => EmitAll(ctx, comp, enums, w));
+
+            if (_options.EmitRuntime) 
+            {
+                var output = Path.Combine(layout.OutputFolder, $"{layout.OutputFile}.gml");
+                ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Gml.ExtensionCore_api.gml", output);
+            }
         }
 
         // ============================================================

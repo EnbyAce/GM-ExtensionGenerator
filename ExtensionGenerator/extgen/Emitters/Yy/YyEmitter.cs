@@ -1,7 +1,7 @@
 ﻿using codegencore.Model;
+using extgen.Config;
 using extgen.Emitters.Doc;
 using extgen.Model;
-using extgen.Options;
 using System.IO;
 using System.Text;
 using System.Text.Json;

@@ -41,6 +41,10 @@ set(EXT_SWITCH_USER_PROPS "" CACHE FILEPATH
 
 option(EXTGEN_PLATFORM_SWITCH "Enable Switch-specific VS integration" OFF)
 
+set(EXT_OUTPUT_DIR "../" CACHE STRING "Where to copy the final built binary")
+set(EXT_APPLE_DROP_DIR "" CACHE STRING "Where to copy packaged Apple xcframework zip (optional)")
+set(EXT_ANDROID_OUTPUT_DIR "" CACHE STRING "Where to copy the JNI binaries (optional)")
+
 # ============================================================
 # Platform classification
 # ============================================================
@@ -276,10 +280,33 @@ endif()
 # ============================================================
 # Outputs / post-build copies
 # ============================================================
-set(_EXT_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${EXTGEN_BINARY_OUTPUT}/")
+
+# Normalize EXT_OUTPUT_DIR -> _EXT_OUT_DIR
+if(EXT_OUTPUT_DIR STREQUAL "")
+  set(_EXT_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../")
+elseif(IS_ABSOLUTE "${EXT_OUTPUT_DIR}")
+  set(_EXT_OUT_DIR "${EXT_OUTPUT_DIR}")
+else()
+  get_filename_component(_EXT_OUT_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/${EXT_OUTPUT_DIR}"
+    ABSOLUTE
+  )
+endif()
 
 if(ANDROID)
-  set(_ANDROID_OUT_BASE "${CMAKE_CURRENT_SOURCE_DIR}/${EXTGEN_ANDROID_OUTPUT}/libs")
+
+  if(EXT_ANDROID_OUTPUT_DIR STREQUAL "")
+    set(_EXT_ANDROID_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../AndroidSource")
+  elseif(IS_ABSOLUTE "${EXT_ANDROID_OUTPUT_DIR}")
+    set(_EXT_ANDROID_OUT_DIR "${EXT_ANDROID_OUTPUT_DIR}")
+  else()
+    get_filename_component(_EXT_ANDROID_OUT_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/${EXT_ANDROID_OUTPUT_DIR}"
+    ABSOLUTE
+    )
+  endif()
+
+  set(_ANDROID_OUT_BASE "${_EXT_ANDROID_OUT_DIR}/libs")
   set(_ANDROID_ABI_DIR "${_ANDROID_OUT_BASE}/${CMAKE_ANDROID_ARCH_ABI}")
 
   add_custom_command(
@@ -291,7 +318,7 @@ if(ANDROID)
   )
 
   if(DEFINED EXT_TP_ANDROID_AAR AND EXISTS "${EXT_TP_ANDROID_AAR}")
-    set(_ANDROID_AAR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${EXTGEN_ANDROID_OUTPUT}/libs-aar")
+    set(_ANDROID_AAR_DIR "${_EXT_ANDROID_OUT_DIR}/libs-aar")
     add_custom_command(
       TARGET ${PROJECT_NAME} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "${_ANDROID_AAR_DIR}"

@@ -1,5 +1,5 @@
-﻿using extgen.Emitters.Utils;
-using extgen.Options;
+﻿using extgen.Config;
+using extgen.Emitters.Utils;
 
 namespace extgen.Emitters.Cpp
 {

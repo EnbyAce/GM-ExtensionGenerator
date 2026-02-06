@@ -1,7 +1,4 @@
-﻿using extgen.Options;
-
-
-namespace extgen.Emitters.Yy
+﻿namespace extgen.Emitters.Yy
 {
     internal sealed class YyLayout
     {
@@ -11,8 +8,10 @@ namespace extgen.Emitters.Yy
 
         public YyLayout(string root, YyEmitterOptions options)
         {
-            OutputDir = Path.GetFullPath(options.OutputFolder, root);
-            OutputFile = Path.GetFileNameWithoutExtension(options.OutputFilename);
+            var apiOutput = Path.GetFullPath(options.OutputFile, root);
+
+            OutputFile = Path.GetFileNameWithoutExtension(apiOutput);
+            OutputDir = Path.GetDirectoryName(apiOutput) ?? root;
 
             Directory.CreateDirectory(OutputDir);
         }

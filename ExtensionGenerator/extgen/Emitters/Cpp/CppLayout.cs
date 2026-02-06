@@ -1,4 +1,4 @@
-﻿using extgen.Options;
+﻿using System.Runtime.ExceptionServices;
 
 namespace extgen.Emitters.Cpp
 {

@@ -1,5 +1,5 @@
 using codegencore.Model;
-using extgen.Options;
+using extgen.Config;
 
 namespace extgen.TypeSystem.Objc
 {

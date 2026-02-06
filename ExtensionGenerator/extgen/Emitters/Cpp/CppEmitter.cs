@@ -1,9 +1,9 @@
 ﻿using codegencore.Model;
 using codegencore.Writers.Lang;
+using extgen.Config;
 using extgen.Emitters.Utils;
 using extgen.Model;
 using extgen.Model.Utils;
-using extgen.Options;
 using extgen.TypeSystem.Cpp;
 using extgen.Utils;
 
