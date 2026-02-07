@@ -5,6 +5,7 @@ namespace extgen.Config.Extras
 {
     public sealed class DocsConfig : GeneratorConfigBase
     {
+        [JsonPropertyName("outputFolder")]
         public override string OutputFolder { get; set; } = "./";
 
         [JsonPropertyName("outputFileName")] public string OutputFileName { get; set; } = "documentation";

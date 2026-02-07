@@ -9,7 +9,7 @@ namespace extgen.Config.Targets.Mobile
 
     public sealed class AndroidTargetConfig : GeneratorConfigBase
     {
-        [JsonPropertyName("mode")]
+        [JsonPropertyName("mode"), JsonRequired()]
         public AndroidMode Mode { get; set; } = AndroidMode.Java;
         [JsonPropertyName("outputFolder")]
         public override string OutputFolder { get; set; } = "../AndroidSource";

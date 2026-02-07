@@ -114,7 +114,11 @@ namespace extgen
 
             try
             {
-                EnsureSchemaBesideConfigAndPatchConfigJson(fullConfigPath);
+                if (!EnsureSchemaBesideConfigAndPatchConfigJson(fullConfigPath)) 
+                {
+                    Console.WriteLine($"Config JSON updated with new patching schema.");
+                    return 0;
+                }
             }
             catch (JsonException je)
             {
@@ -133,7 +137,7 @@ namespace extgen
 
             var baseDir = Path.GetDirectoryName(fullConfigPath)!;
             var inputPath = ResolvePath(cfg.Input, baseDir);
-            var outputDir = ResolvePath(cfg.OutputDir, baseDir);
+            var outputDir = ResolvePath(cfg.Root, baseDir);
 
             if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
             {
@@ -320,7 +324,7 @@ namespace extgen
                 var cfg = new ExtGenConfig
                 {
                     Schema = $"./{schemaFileName}",
-                    Input = "./input.gmidl"
+                    Root = "./"
                 };
 
                 var json = JsonSerializer.Serialize(cfg, jsonSerializerOptions);
@@ -337,7 +341,7 @@ namespace extgen
             }
         }
 
-        private static void EnsureSchemaBesideConfigAndPatchConfigJson(string fullConfigPath, string schemaFileName = "extgen.schema.json")
+        private static bool EnsureSchemaBesideConfigAndPatchConfigJson(string fullConfigPath, string schemaFileName = "extgen.schema.json")
         {
             var cfgDir = Path.GetDirectoryName(fullConfigPath)!;
             Directory.CreateDirectory(cfgDir);
@@ -370,23 +374,24 @@ namespace extgen
             if (node is not JsonObject obj)
                 throw new JsonException("Config root must be a JSON object.");
 
-            // Use a relative schema path so repo moves nicely
-            obj["$schema"] = $"./{schemaFileName}";
-
-            // Re-emit with indentation (you *will* lose comments; JSON can't keep them)
-            var patched = obj.ToJsonString(new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-
             var desired = $"./{schemaFileName}";
             var current = obj["$schema"]?.GetValue<string>();
 
             if (!string.Equals(current, desired, StringComparison.Ordinal))
             {
                 obj["$schema"] = desired;
+
+                // Re-emit with indentation (you *will* lose comments; JSON can't keep them)
+                var patched = obj.ToJsonString(new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                
                 File.WriteAllText(fullConfigPath, patched, encoding);
+                return false;
             }
+
+            return true;
         }
     }
 }

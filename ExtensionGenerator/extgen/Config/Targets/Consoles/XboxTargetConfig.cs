@@ -1,4 +1,5 @@
 ﻿using extgen.Config;
+using System.Text.Json.Serialization;
 
 namespace extgen.Config.Targets.Consoles
 {
@@ -8,6 +9,7 @@ namespace extgen.Config.Targets.Consoles
 
     public sealed class XboxTargetConfig : GeneratorConfigBase
     {
+        [JsonPropertyName("outputFolder")]
         public override string OutputFolder { get; set; } = "../";
     }
 }

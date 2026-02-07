@@ -9,6 +9,7 @@ namespace extgen.Config.Gml
 
     public sealed class GmlConfig : IGeneratorConfig
     {
+        [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;
 
         [JsonPropertyName("emitRuntime")]

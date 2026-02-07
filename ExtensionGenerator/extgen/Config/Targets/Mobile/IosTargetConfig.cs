@@ -5,7 +5,7 @@ namespace extgen.Config.Targets.Mobile
 {
     public class IosTargetConfig : GeneratorConfigBase, IAppleMobileTargetConfig
     {
-        [JsonPropertyName("mode")]
+        [JsonPropertyName("mode"), JsonRequired()]
         public AppleMobileMode Mode { get; set; } = AppleMobileMode.Objc;
         [JsonPropertyName("sourceFolder")]
         public string SourceFolder { get; set; } = "./ios";

@@ -1,5 +1,4 @@
-﻿using extgen.Config;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace extgen.Config.Targets.Mobile
 {
@@ -9,7 +8,7 @@ namespace extgen.Config.Targets.Mobile
 
     public interface IAppleMobileTargetConfig : IGeneratorConfig
     {
-        [JsonPropertyName("mode")]
+        [JsonPropertyName("mode"), JsonRequired()]
         public AppleMobileMode Mode { get; set; }
     }
 }

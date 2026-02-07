@@ -14,8 +14,8 @@ namespace extgen.Config
         [JsonPropertyName("input")]
         public string? Input { get; set; }
 
-        [JsonPropertyName("outputDir")]
-        public string? OutputDir { get; set; }
+        [JsonPropertyName("root")]
+        public string? Root { get; set; }
 
         [JsonPropertyName("profile")]
         public BuildProfile Profile { get; set; } = BuildProfile.Full;
