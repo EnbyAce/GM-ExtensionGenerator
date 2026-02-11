@@ -146,7 +146,7 @@ namespace extgen.Emitters.AppleMobile.Objc
             var platform = ctx.Settings.Platform;
 
             w.Import("Foundation/Foundation.h", true)
-                .Import($"{ext}Internal_{platform}.h")
+                .Import($"{platform}/{ext}Internal_{platform}.h")
                 .Line();
 
             w.Interface(ext, $"{ext}Internal", bridge.UserShellProtocols(ctx), null)

@@ -19,7 +19,7 @@ namespace extgen.Bridge.Objc
     {
         public void EmitWire(ObjcLayout layout)
         {
-            // Do nothing here this is just for Swift extensions
+            CppEmitter.EmitWire(layout.CoreDir);
         }
 
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
