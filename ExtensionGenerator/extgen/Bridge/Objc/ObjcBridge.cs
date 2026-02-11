@@ -93,7 +93,7 @@ namespace extgen.Bridge.Objc
         public void EmitHeaderArtifacts(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
         {
             CppCommonEmitter<ObjcWriter>.EmitCommonIncludes(w);
-            w.Include("GMExtWire.h", false).Line();
+            w.Include("core/GMExtWire.h", false).Line();
 
             CppEmitterSettings cppEmitterOptions = new() { SourceFilename = ctx.Settings.SourceFilename, SourceFolder = ctx.Settings.SourceFilename };
             CppEmitterContext cppCtx = new(ctx.ExtName, cppEmitterOptions, ctx.Runtime);
