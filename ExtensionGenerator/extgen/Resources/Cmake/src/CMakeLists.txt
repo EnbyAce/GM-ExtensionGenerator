@@ -3,12 +3,8 @@ set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR})
 # =============================================================================
 # GameMaker iOS integration (optional)
 # =============================================================================
-set(EXT_GM_XCODEPROJ "" CACHE FILEPATH
-  "Path to the GameMaker-generated .xcodeproj (for auto-integration). Example: /path/MyGame.xcodeproj")
-
-set(EXT_GM_APP_TARGET "" CACHE STRING
-  "Name of the GameMaker app target inside the Xcode project (e.g. 'MyGame'). Leave empty to auto-detect if supported.")
-
+set(EXT_GM_XCODEPROJ_OVERRIDE "/ABS/PATH/TO/GAME.xcodeproj" CACHE STRING "" FORCE)
+set(EXT_GM_APP_TARGET_OVERRIDE "" CACHE STRING "" FORCE)
 
 # =============================================================================
 # Public headers for Apple XCFramework packaging
