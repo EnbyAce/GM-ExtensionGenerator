@@ -26,6 +26,10 @@ option(EXT_EMBED_CORE_SRC "Compile code_gen/core sources into lib" ON)
 set(EXT_APPLE_PACKAGE_CONFIG "Release" CACHE STRING "Config used by xcframework packagers (Debug/Release)")
 set_property(CACHE EXT_APPLE_PACKAGE_CONFIG PROPERTY STRINGS Debug Release)
 
+# GameMaker XCode integration (iOS|tvOS development, optional)
+set(EXT_GM_XCODEPROJ "" CACHE STRING "Absolute path to GameMaker-exported .xcodeproj")
+set(EXT_GM_APP_TARGET "" CACHE STRING "Optional: GameMaker app target name (empty = auto-detect)")
+
 # Disable code signing for Xcode-generated projects (device & sim)
 if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
   set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
@@ -378,8 +382,23 @@ else()
 endif()
 
 # ============================================================
-# Apple XCFramework packagers (kept out of the main file logic)
+# Apple XCFramework packagers and Xcode auto-integration (iOS/tvOS)
 # ============================================================
 if(EXTGEN_IS_APPLE_MOBILE)
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/extgen_xcframework.cmake)
+
+  add_custom_target(integrate_gamemaker
+    COMMAND ${CMAKE_COMMAND}
+      -DEXT_GM_XCODEPROJ:FILEPATH="${EXT_GM_XCODEPROJ}"
+      -DEXT_GM_APP_TARGET:STRING="${EXT_GM_APP_TARGET}"
+      -DEXT_EXT_XCODEPROJ:FILEPATH="${CMAKE_BINARY_DIR}/${PROJECT_NAME}.xcodeproj"
+      -DEXT_EXT_TARGET:STRING="${PROJECT_NAME}"
+      -P "${CMAKE_SOURCE_DIR}/cmake/extgen_integrate_gamemaker_xcode.cmake"
+    COMMENT "Integrating extension into GameMaker Xcode project"
+    VERBATIM
+  )
+
+  if(NOT EXT_ENABLE_GM_INTEGRATION)
+    set_property(TARGET integrate_gamemaker PROPERTY EXCLUDE_FROM_ALL TRUE)
+  endif()
 endif()

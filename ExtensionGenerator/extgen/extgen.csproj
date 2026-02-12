@@ -11,6 +11,8 @@
     <None Remove="Resources\Cmake\.clang-format" />
     <None Remove="Resources\Cmake\CMakeLists.txt" />
     <None Remove="Resources\Cmake\CMakePresets.json" />
+    <None Remove="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.cmake" />
+    <None Remove="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.rb" />
     <None Remove="Resources\Cmake\cmake\extgen_package_xcframework.cmake" />
     <None Remove="Resources\Cmake\cmake\extgen_xcframework.cmake" />
     <None Remove="Resources\Cmake\src\CMakeLists.txt" />
@@ -33,6 +35,8 @@
     <EmbeddedResource Include="Resources\Cmake\CMakePresets.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.cmake" />
+    <EmbeddedResource Include="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.rb" />
     <EmbeddedResource Include="Resources\Cmake\cmake\extgen_package_xcframework.cmake" />
     <EmbeddedResource Include="Resources\Cmake\cmake\extgen_xcframework.cmake" />
     <EmbeddedResource Include="Resources\Cmake\src\CMakeLists.txt">
@@ -109,11 +113,7 @@
 			<BuildDate>$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))</BuildDate>
 		</PropertyGroup>
 
-		<Exec
-		  Condition="Exists('$(MSBuildProjectDirectory)\..\..\.git')"
-		  Command="git rev-parse --short HEAD"
-		  ConsoleToMSBuild="true"
-		  IgnoreExitCode="true">
+		<Exec Condition="Exists('$(MSBuildProjectDirectory)\..\..\.git')" Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
 			<Output TaskParameter="ConsoleOutput" PropertyName="GitCommitRaw" />
 		</Exec>
 
@@ -132,10 +132,7 @@
 			<BuildInfoLines Include="}" />
 		</ItemGroup>
 
-		<WriteLinesToFile
-          File="$(IntermediateOutputPath)BuildInfo.g.cs"
-          Lines="@(BuildInfoLines)"
-          Overwrite="true" />
+		<WriteLinesToFile File="$(IntermediateOutputPath)BuildInfo.g.cs" Lines="@(BuildInfoLines)" Overwrite="true" />
 	</Target>
 
 	<ItemGroup>

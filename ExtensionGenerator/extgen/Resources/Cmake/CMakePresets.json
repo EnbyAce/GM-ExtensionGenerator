@@ -102,6 +102,15 @@
       }
     },
 
+    {
+      "name": "base-xcode-gm",
+      "hidden": true,
+      "inherits": "base-xcode",
+      "cacheVariables": {
+        "EXT_GM_XCODEPROJ": "",
+        "EXT_GM_APP_TARGET": ""
+      }
+    }
 
     {
       "name": "ios-xcframework-release",
@@ -196,6 +205,25 @@
       }
     },
 
+
+    {
+      "name": "ios-gamemaker-integrate",
+      "displayName": "iOS: Integrate into GameMaker Xcode project",
+      "hidden": ${EXTGEN_IOS_DISABLED},
+      "inherits": [ "ios-xcframework-debug", "base-xcode-gm" ],
+      "cacheVariables": {
+        "EXT_APPLE_NATIVE_FRAMEWORK": "OFF"
+      }
+    },
+    {
+      "name": "tvos-gamemaker-integrate",
+      "displayName": "tvOS: Integrate into GameMaker Xcode project",
+      "hidden": ${EXTGEN_TVOS_DISABLED},
+      "inherits": [ "tvos-xcframework-debug", "base-xcode-gm" ],
+      "cacheVariables": {
+        "EXT_APPLE_NATIVE_FRAMEWORK": "OFF"
+      }
+    },
 
 
     {
@@ -480,6 +508,19 @@
       "configurePreset": "tvos-xcframework-debug",
       "configuration": "Debug",
       "targets": [ "package_tvos_xcframework" ]
+    },
+
+    {
+      "name": "ios-integrate-gamemaker",
+      "displayName": "iOS: Integrate into GameMaker (no build)",
+      "configurePreset": "ios-gamemaker-integrate",
+      "targets": [ "integrate_gamemaker" ]
+    },
+    {
+      "name": "tvos-integrate-gamemaker",
+      "displayName": "tvOS: Integrate into GameMaker (no build)",
+      "configurePreset": "tvos-gamemaker-integrate",
+      "targets": [ "integrate_gamemaker" ]
     }
   ]
 }
