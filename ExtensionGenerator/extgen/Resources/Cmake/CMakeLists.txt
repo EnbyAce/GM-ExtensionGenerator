@@ -403,10 +403,11 @@ if(EXTGEN_IS_APPLE_MOBILE)
 
   add_custom_target(integrate_gamemaker
     COMMAND ${CMAKE_COMMAND}
-      -DEXT_GM_XCODEPROJ:FILEPATH="${_EXT_GM_XCODEPROJ}"
-      -DEXT_GM_APP_TARGET:STRING="${_EXT_GM_APP_TARGET}"
-      -DEXT_EXT_XCODEPROJ:FILEPATH="${CMAKE_BINARY_DIR}/${PROJECT_NAME}.xcodeproj"
-      -DEXT_EXT_TARGET:STRING="${PROJECT_NAME}"
+      -DEXT_REPO_ROOT:PATH=${CMAKE_SOURCE_DIR}
+      -DEXT_GM_XCODEPROJ:FILEPATH=${_EXT_GM_XCODEPROJ}
+      -DEXT_GM_APP_TARGET:STRING=${_EXT_GM_APP_TARGET}
+      -DEXT_EXT_XCODEPROJ:FILEPATH=${CMAKE_BINARY_DIR}/${PROJECT_NAME}.xcodeproj
+      -DEXT_EXT_TARGET:STRING=${PROJECT_NAME}
       -P "${CMAKE_SOURCE_DIR}/cmake/extgen_integrate_gamemaker_xcode.cmake"
     COMMENT "Integrating extension into GameMaker Xcode project"
     VERBATIM
@@ -416,3 +417,4 @@ if(EXTGEN_IS_APPLE_MOBILE)
     set_property(TARGET integrate_gamemaker PROPERTY EXCLUDE_FROM_ALL TRUE)
   endif()
 endif()
+

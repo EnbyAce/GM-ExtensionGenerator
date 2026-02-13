@@ -65,6 +65,7 @@ namespace extgen.Emitters.Cmake
 
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.cmake.extgen_integrate_gamemaker_xcode.cmake", Path.Combine(layout.ScriptsDir, "extgen_integrate_gamemaker_xcode.cmake"));
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.cmake.extgen_integrate_gamemaker_xcode.rb", Path.Combine(layout.ScriptsDir, "extgen_integrate_gamemaker_xcode.rb"));
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.cmake.Gemfile", Path.Combine(layout.ScriptsDir, "Gemfile"));
 
             var targets = config.Targets;
             ResourceWriter.WriteTemplatedTextResource(typeof(Program).Assembly, "extgen.Resources.Cmake.cmake.extgen_package_xcframework.cmake", Path.Combine(layout.ScriptsDir, "extgen_package_xcframework.cmake"), new Dictionary<string, string>

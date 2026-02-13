@@ -15,6 +15,7 @@
     <None Remove="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.rb" />
     <None Remove="Resources\Cmake\cmake\extgen_package_xcframework.cmake" />
     <None Remove="Resources\Cmake\cmake\extgen_xcframework.cmake" />
+    <None Remove="Resources\Cmake\cmake\Gemfile" />
     <None Remove="Resources\Cmake\src\CMakeLists.txt" />
     <None Remove="Resources\Cmake\third_party\CMakeLists.txt" />
     <None Remove="Resources\Cpp\GMExtUtils.cpp" />
@@ -39,6 +40,7 @@
     <EmbeddedResource Include="Resources\Cmake\cmake\extgen_integrate_gamemaker_xcode.rb" />
     <EmbeddedResource Include="Resources\Cmake\cmake\extgen_package_xcframework.cmake" />
     <EmbeddedResource Include="Resources\Cmake\cmake\extgen_xcframework.cmake" />
+    <EmbeddedResource Include="Resources\Cmake\cmake\Gemfile" />
     <EmbeddedResource Include="Resources\Cmake\src\CMakeLists.txt">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
