@@ -155,7 +155,7 @@ namespace extgen.Parsing.Gmidl
                    .ToImmutableArray();
 
             var functions = cls.Data.Functions
-                .Where(p => p.Attributes.Enabled("method"))
+                //.Where(p => p.Attributes.Enabled("method"))
                 .Select(f => ParseFunction(f, classType))
                 .ToImmutableArray();
 
