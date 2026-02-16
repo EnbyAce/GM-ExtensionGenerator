@@ -28,15 +28,17 @@ namespace extgen.Emitters.Doc
 
         private static void EmitAll(DocWriter w, IrCompilation c)
         {
-            EmitFunctions(w, c.Functions);
+            EmitFunctions(w, c);
             EmitStructs(w, c.Structs);
             EmitEnums(w, c.Enums);
             EmitConstants(w, c.Constants);
         }
 
-        private static void EmitFunctions(DocWriter w, ImmutableArray<IrFunction> functions)
+        private static void EmitFunctions(DocWriter w, IrCompilation cmp)
         {
-            foreach (var f in functions)
+            var allFunctions = cmp.Functions.Select(f => f).Concat(cmp.Structs.SelectMany(s => s.Functions.Select(f => PatchStructMethod(s, f))));
+
+            foreach (var f in allFunctions)
             {
                 w.JsDoc(spec =>
                 {
@@ -59,6 +61,16 @@ namespace extgen.Emitters.Doc
 
                 w.Line();
             }
+        }
+
+        private static IrFunction PatchStructMethod(IrStruct s, IrFunction f)
+        {
+            if (f.Self is null) return f;
+
+            return f with
+            {
+                Name = $"{s.Name}::{f.Name}"
+            };
         }
 
         private static void EmitStructs(DocWriter w, IImmutableList<IrStruct> structs)
