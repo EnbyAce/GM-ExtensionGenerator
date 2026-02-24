@@ -127,7 +127,7 @@ namespace extgen.TypeSystem.Cpp
         {
             // If it's nullable, the wrapper (std::optional<...>) is usually non-trivial.
             if (IrType.IsNullable(t)) 
-                t = t.NonNull();
+                t = t.StripNullable();
 
             return t switch
             {

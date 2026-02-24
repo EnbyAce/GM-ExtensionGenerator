@@ -181,7 +181,7 @@ namespace extgen.Emitters.Gml
                         foreach (var p in patchedFunc.Parameters)
                             builder.Param(new ParamDoc(p.Name, DocEmitter.JsDocType(p.Type)));
 
-                        if (!IrTypeUtil.IsVoid(patchedFunc.ReturnType))
+                        if (!patchedFunc.ReturnType.IsVoid())
                             builder.Returns(DocEmitter.JsDocType(fn.ReturnType));
 
                         if (fn.Hidden)
@@ -286,7 +286,7 @@ namespace extgen.Emitters.Gml
                 foreach (var p in fn.Parameters)
                     builder.Param(new ParamDoc(p.Name, DocEmitter.JsDocType(p.Type)));
 
-                if (!IrTypeUtil.IsVoid(fn.ReturnType))
+                if (!fn.ReturnType.IsVoid())
                     builder.Returns(DocEmitter.JsDocType(fn.ReturnType));
 
                 if (fn.Hidden)

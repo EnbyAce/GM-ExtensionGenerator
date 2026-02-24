@@ -209,11 +209,11 @@ namespace extgen.Bridge.Java
                     var name = p.Name;
 
                     string expr;
-                    if (IrTypeUtil.IsNumericScalar(t))
+                    if (t.IsNumericScalar())
                     {
                         var javaType = Types.Map(t, owned: true);
 
-                        if (IrTypeUtil.IsBool(t))
+                        if (t.IsBool())
                         {
                             expr = $"{name} != 0";
                         }
@@ -222,7 +222,7 @@ namespace extgen.Bridge.Java
                             expr = $"({javaType}){name}";
                         }
                     }
-                    else if (IrTypeUtil.IsStringScalar(t))
+                    else if (t.IsStringScalar())
                     {
                         // Bridge type is String, and user type is String too.
                         expr = name;

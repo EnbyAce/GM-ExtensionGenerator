@@ -4,25 +4,61 @@ namespace codegencore.Models
 {
     public static class IrTypeExtensions
     {
-        public static IrType NonNull(this IrType t) => IrType.StripNullable(t);
+        public static IrType StripNullable(this IrType t) => IrType.StripNullable(t);
+
+        public static bool IsVoid(this IrType t) =>
+            t is IrType.Builtin { Kind: BuiltinKind.Void };
+
+        public static bool IsBool(this IrType t) =>
+            t.StripNullable() is IrType.Builtin { Kind: BuiltinKind.Bool };
 
         public static bool IsNullable(this IrType t) => IrType.IsNullable(t);
 
+        public static bool IsStringScalar(this IrType t) =>
+            t.StripNullable() is IrType.Builtin { Kind: BuiltinKind.String };
+
+        public static bool IsNumericScalar(this IrType t)
+        {
+            t = t.StripNullable();
+
+            // NOTE: arrays are not numeric scalars at surface
+            if (t is IrType.Array) return false;
+
+            return t is IrType.Builtin
+            {
+                Kind:
+                    BuiltinKind.Bool
+                    or BuiltinKind.Int8 or BuiltinKind.UInt8
+                    or BuiltinKind.Int16 or BuiltinKind.UInt16
+                    or BuiltinKind.Int32 or BuiltinKind.UInt32
+                    or BuiltinKind.Int64 or BuiltinKind.UInt64
+                    or BuiltinKind.Float32 or BuiltinKind.Float64
+            };
+        }
+
         public static bool IsVarArray(this IrType t) =>
-            t.NonNull() is IrType.Array { FixedLength: null };
+            t.StripNullable() is IrType.Array { FixedLength: null };
 
         public static bool IsFixedArray(this IrType t) =>
-            t.NonNull() is IrType.Array { FixedLength: int };
+            t.StripNullable() is IrType.Array { FixedLength: int };
 
         public static bool IsEnum(this IrType t) =>
-            t.NonNull() is IrType.Named { Kind: NamedKind.Enum };
+            t.StripNullable() is IrType.Named { Kind: NamedKind.Enum };
 
-        public static string ToDebugString(this IrType t)
-        {
-            var sb = new StringBuilder();
-            Append(sb, t);
-            return sb.ToString();
-        }
+        public static string ToDebugString(this IrType t) =>
+            t switch
+            {
+                IrType.Nullable n => $"optional<{ToDebugString(n.Underlying)}>",
+                IrType.Array a => a.FixedLength is int n
+                    ? $"{ToDebugString(a.Element)}[{n}]"
+                    : $"{ToDebugString(a.Element)}[]",
+
+                IrType.Named { Kind: NamedKind.Struct, Name: var s } => $"struct {s}",
+                IrType.Named { Kind: NamedKind.Enum, Name: var e } => $"enum {e}",
+
+                IrType.Builtin b => b.Kind.ToString(),
+                _ => t.ToString() ?? "type"
+            };
 
         public static bool ContainsBuiltin(this IrType t, BuiltinKind kind)
         {
@@ -35,6 +71,14 @@ namespace codegencore.Models
                 _ => false
             };
         }
+
+        public static bool ContainsNullable(this IrType t) =>
+            t switch
+            {
+                IrType.Nullable => true,
+                IrType.Array a => ContainsNullable(a.Element),
+                _ => false
+            };
 
         private static void Append(StringBuilder sb, IrType t)
         {

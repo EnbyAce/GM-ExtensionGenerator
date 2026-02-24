@@ -252,13 +252,13 @@ namespace extgen.Emitters.AppleMobile.Swift
                         cls.Func(
                             fn.Name,
                             ps,
-                            IrTypeUtil.IsVoid(fn.ReturnType) ? null : ret,
+                            fn.ReturnType.IsVoid() ? null : ret,
                             modifiers: ["public", "override"],
                             body: m =>
                             {
                                 m.Line($"// TODO: implement {fn.Name}");
 
-                                if (!IrTypeUtil.IsVoid(fn.ReturnType))
+                                if (!fn.ReturnType.IsVoid())
                                 {
                                     if (fn.ReturnType is IrType.Named { Kind: NamedKind.Struct })
                                         m.Line($"fatalError(\"{fn.Name} is not implemented\")");
@@ -348,7 +348,7 @@ namespace extgen.Emitters.AppleMobile.Swift
                     new SwiftParam(p.Name, p.Name, typeMap.Map(p.Type, owned: false)));
 
                 string? userRetType =
-                    IrTypeUtil.IsVoid(fn.ReturnType) ? null : typeMap.Map(fn.ReturnType, owned: true);
+                    fn.ReturnType.IsVoid() ? null : typeMap.Map(fn.ReturnType, owned: true);
 
                 w.Func(
                     name: fn.Name,
@@ -359,7 +359,7 @@ namespace extgen.Emitters.AppleMobile.Swift
                     {
                         body.Line($"// default stub for {fn.Name}");
 
-                        if (!IrTypeUtil.IsVoid(fn.ReturnType))
+                        if (!fn.ReturnType.IsVoid())
                         {
                             if (fn.ReturnType is IrType.Named { Kind: NamedKind.Struct })
                                 body.Line($"fatalError(\"{fn.Name} is not implemented\")");
@@ -418,7 +418,7 @@ namespace extgen.Emitters.AppleMobile.Swift
             var callArgs = EmitDecode(w, fn, needsArgsBuffer: needsArgsBuffer, readerVar: rt.BufferReaderVar, enums);
             var labeledArgs = string.Join(", ", callArgs);
 
-            if (IrTypeUtil.IsVoid(fn.ReturnType))
+            if (fn.ReturnType.IsVoid())
             {
                 w.Line($"self.{fn.Name}({labeledArgs})");
                 w.Line("return 0.0");
@@ -451,7 +451,7 @@ namespace extgen.Emitters.AppleMobile.Swift
 
                 foreach (var p in fn.Parameters)
                 {
-                    w.Line($"// field: {p.Name}, type: {IrTypeUtil.ToDebugString(p.Type)}");
+                    w.Line($"// field: {p.Name}, type: {p.Type.ToDebugString()}");
 
                     wireHelpers.DecodeLines(
                         w,
@@ -476,16 +476,16 @@ namespace extgen.Emitters.AppleMobile.Swift
 
                 string expr;
 
-                if (IrTypeUtil.IsNumericScalar(t))
+                if (t.IsNumericScalar())
                 {
                     var swiftType = typeMap.Map(t, owned: true);
 
-                    if (IrTypeUtil.IsBool(t))
+                    if (t.IsBool())
                         expr = $"{bridgeName} != 0";
                     else
                         expr = $"{swiftType}({bridgeName})";
                 }
-                else if (IrTypeUtil.IsStringScalar(t))
+                else if (t.IsStringScalar())
                 {
                     expr = bridgeName;
                 }
@@ -502,7 +502,7 @@ namespace extgen.Emitters.AppleMobile.Swift
 
         public void EmitEncodeReturn(SwiftWriter w, IrType ret, string resultExpr, bool needsRetBuffer, string writerVar, IIrTypeEnumResolver enums)
         {
-            if (IrTypeUtil.IsVoid(ret))
+            if (ret.IsVoid())
             {
                 w.Line("return 0.0");
                 return;
@@ -518,7 +518,7 @@ namespace extgen.Emitters.AppleMobile.Swift
                     $"size: Int({runtime.RetBufferLengthParam}))");
                 w.Line();
 
-                w.Line($"// return: {resultExpr}, type: {IrTypeUtil.ToDebugString(ret)}");
+                w.Line($"// return: {resultExpr}, type: {ret.ToDebugString()}");
                 wireHelpers.EncodeLines(w, ret, accessor: resultExpr, bufferVar: writerVar);
 
                 w.Line("return 0.0");
@@ -527,15 +527,15 @@ namespace extgen.Emitters.AppleMobile.Swift
 
             // Direct-return path: ONLY numeric scalar or string scalar
             // Nullable is not representable as Double/String -> fallback
-            if (IrTypeUtil.ContainsNullable(ret))
+            if (ret.ContainsNullable())
             {
                 w.Line("return 0.0");
                 return;
             }
 
-            if (IrTypeUtil.IsNumericScalar(ret))
+            if (ret.IsNumericScalar())
             {
-                if (IrTypeUtil.IsBool(ret))
+                if (ret.IsBool())
                     w.Line($"return {resultExpr} ? 1.0 : 0.0");
                 else
                     w.Line($"return Double({resultExpr})");
@@ -543,7 +543,7 @@ namespace extgen.Emitters.AppleMobile.Swift
                 return;
             }
 
-            if (IrTypeUtil.IsStringScalar(ret))
+            if (ret.IsStringScalar())
             {
                 w.Line($"return {resultExpr}");
                 return;
@@ -573,9 +573,9 @@ namespace extgen.Emitters.AppleMobile.Swift
                 return $"{typeMap.Map(ne, owned: true)}(rawValue: 0)!";
 
             // Builtins
-            if (IrTypeUtil.IsStringScalar(t)) return "\"\"";
-            if (IrTypeUtil.IsBool(t)) return "false";
-            if (IrTypeUtil.IsNumericScalar(t)) return "0";
+            if (t.IsStringScalar()) return "\"\"";
+            if (t.IsBool()) return "false";
+            if (t.IsNumericScalar()) return "0";
 
             return "0";
         }

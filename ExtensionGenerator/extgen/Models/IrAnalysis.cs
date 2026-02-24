@@ -13,8 +13,8 @@ namespace extgen.Models
             foreach (var p in fn.Parameters)
             {
                 if (p.Type.IsNullable()) return false;
-                if (IrTypeUtil.IsStringScalar(p.Type)) { hasString = true; directCount++; continue; }
-                if (IrTypeUtil.IsNumericScalar(p.Type) && !(p.Type is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) { directCount++; continue; }
+                if (p.Type.IsStringScalar()) { hasString = true; directCount++; continue; }
+                if (p.Type.IsNumericScalar() && !(p.Type is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) { directCount++; continue; }
                 // non‑directable
                 return false;
             }
@@ -41,8 +41,8 @@ namespace extgen.Models
 
             if (fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Void }) return false;
 
-            if (IrTypeUtil.IsStringScalar(fn.ReturnType)) return false;
-            if (IrTypeUtil.IsNumericScalar(fn.ReturnType) && !(fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) return false;
+            if (fn.ReturnType.IsStringScalar()) return false;
+            if (fn.ReturnType.IsNumericScalar() && !(fn.ReturnType is IrType.Builtin { Kind: BuiltinKind.Int64 or BuiltinKind.UInt64 })) return false;
 
             return true;
         }
