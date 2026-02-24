@@ -168,7 +168,7 @@ namespace extgen.Emitters.Gml
                 body.Assign("__uid", StringHash.ToUInt32(s.Name).ToString(), VariableScope.Static).Line();
 
                 foreach (var f in s.Fields)
-                    body.Assign(f.Name, f.Value ?? "undefined");
+                    body.Assign($"self.{f.Name}", f.Value ?? "undefined");
 
                 body.Line();
                 foreach (var fn in s.Functions)
@@ -218,7 +218,7 @@ namespace extgen.Emitters.Gml
                     foreach (var f in s.Fields)
                     {
                         fn.Comment($"field: {f.Name}, type: {f.Type.ToDebugString()}");
-                        WriteValue(ctx, enums, fn, f.Name, f.Type, bufferName, "_where");
+                        WriteValue(ctx, enums, fn, $"self.{f.Name}", f.Type, bufferName, "_where");
                         fn.Line();
                     }
                 });
@@ -257,7 +257,7 @@ namespace extgen.Emitters.Gml
                     foreach (var f in s.Fields)
                     {
                         fn.Comment($"field: {f.Name}, type: {f.Type.ToDebugString()}");
-                        ReadValue(enums, fn, f.Name, f.Type, bufferName);
+                        ReadValue(enums, fn, $"self.{f.Name}", f.Type, bufferName);
                         fn.Line();
                     }
                 });
