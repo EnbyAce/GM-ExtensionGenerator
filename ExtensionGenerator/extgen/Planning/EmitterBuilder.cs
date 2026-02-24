@@ -36,12 +36,12 @@ namespace extgen.Planning
                 if (rc.Raw.GameMaker.Runtime is { Enabled: true } runtimeCfg)
                     emitters["runtime"] = new GmlEmitter(runtimeCfg.ToSettings());
 
-                if (rc.Raw.GameMaker.Yy is { Enabled: true } yyConfig)
-                    emitters["yy"] = new YyEmitter(yyConfig.ToSettings(rc.AndroidEnabled, rc.IosEnabled, rc.TvosEnabled), rc.Raw.Runtime);
+                if (rc.Raw.GameMaker.Extension is { Enabled: true } yyConfig)
+                    emitters["extension"] = new YyEmitter(yyConfig.ToSettings(rc.AndroidEnabled, rc.IosEnabled, rc.TvosEnabled), rc.Raw.Runtime);
 
                 if (rc.Raw.GameMaker.Injectors is { Enabled: true } injectorsCfg)
                 {
-                    YyConfig extConfig = rc.Raw.GameMaker.Yy;
+                    ExtensionConfig extConfig = rc.Raw.GameMaker.Extension ?? new();
                     emitters["injectors"] = new CppInjectorsEmitter(injectorsCfg.ToSettings(extConfig), rc.Raw.Runtime);
                 }
 

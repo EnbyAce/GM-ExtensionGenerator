@@ -3,7 +3,7 @@
 namespace extgen.Models.Config.GameMaker
 {
     
-    public sealed class YyConfig : IGeneratorConfig
+    public sealed class ExtensionConfig : IGeneratorConfig
     {
         [JsonPropertyName("enabled")]
         public bool Enabled { get; set; } = true;

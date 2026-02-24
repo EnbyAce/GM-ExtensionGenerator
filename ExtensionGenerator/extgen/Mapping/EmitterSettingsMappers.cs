@@ -86,7 +86,7 @@ namespace extgen.Mappers
                 Mode = GmlEmitterMode.Runtime
             };
 
-        public static YyEmitterSettings ToSettings(this YyConfig cfg, bool androidEnabled, bool iosEnabled, bool tvosEnabled)
+        public static YyEmitterSettings ToSettings(this ExtensionConfig cfg, bool androidEnabled, bool iosEnabled, bool tvosEnabled)
             => new()
             {
                 OutputFile = cfg.OutputFile,
@@ -99,7 +99,7 @@ namespace extgen.Mappers
                 TvosEnabled = tvosEnabled
             };
 
-        public static CppInjectorsEmitterSettings ToSettings(this InjectorsConfig cfg, YyConfig yyConfig)
+        public static CppInjectorsEmitterSettings ToSettings(this InjectorsConfig cfg, ExtensionConfig yyConfig)
         => new()
         {
             OutputFolder = cfg.OutputFolder,

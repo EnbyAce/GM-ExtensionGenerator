@@ -12,8 +12,8 @@ namespace extgen.Models.Config.GameMaker
         [JsonPropertyName("runtime")]
         public RuntimeConfig? Runtime { get; set; }
 
-        [JsonPropertyName("yy")]
-        public YyConfig? Yy { get; set; }
+        [JsonPropertyName("extension")]
+        public ExtensionConfig? Extension { get; set; }
 
         [JsonPropertyName("injectors")]
         public InjectorsConfig? Injectors { get; set; }
