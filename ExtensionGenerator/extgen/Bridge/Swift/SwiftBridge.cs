@@ -90,8 +90,8 @@ namespace extgen.Bridge.Swift
         {
             w.IfDef("__cplusplus", then =>
             {
-                then.Import("${YYXCodeProjName}-Swift.h");
-                then.Line($"using namespace ${{YYXCodeProjName}};");
+                then.Import($"{ctx.ExtName}-Swift.h");
+                then.Line($"using namespace {ctx.ExtName};");
             }).Line();
         }
 
