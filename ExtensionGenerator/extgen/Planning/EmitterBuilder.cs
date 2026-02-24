@@ -1,9 +1,11 @@
 ﻿using extgen.Emitters;
 using extgen.Emitters.Cpp;
+using extgen.Emitters.CppInjectors;
 using extgen.Emitters.Doc;
 using extgen.Emitters.Gml;
 using extgen.Emitters.Yy;
 using extgen.Mappers;
+using extgen.Models.Config.GameMaker;
 using extgen.Models.Config.Targets.Mobile;
 
 namespace extgen.Planning
@@ -26,10 +28,24 @@ namespace extgen.Planning
             }
 
             // Bindings (GML + YY are coupled)
-            if (rc.AllowBindings && rc.Raw.Gml is { Enabled: true } g)
+            if (rc.AllowBindings)
             {
-                emitters["gml"] = new GmlEmitter(g.ToGmlSettings());
-                emitters["yy"] = new YyEmitter(g.ToYySettings(rc.AndroidEnabled, rc.IosEnabled, rc.TvosEnabled), rc.Raw.Runtime);
+                if (rc.Raw.GameMaker.Wrappers is { Enabled: true } wrapperCfg)
+                    emitters["gml"] = new GmlEmitter(wrapperCfg.ToSettings());
+
+                if (rc.Raw.GameMaker.Runtime is { Enabled: true } runtimeCfg)
+                    emitters["runtime"] = new GmlEmitter(runtimeCfg.ToSettings());
+
+                if (rc.Raw.GameMaker.Yy is { Enabled: true } yyConfig)
+                    emitters["yy"] = new YyEmitter(yyConfig.ToSettings(rc.AndroidEnabled, rc.IosEnabled, rc.TvosEnabled), rc.Raw.Runtime);
+
+                if (rc.Raw.GameMaker.Injectors is { Enabled: true } injectorsCfg)
+                {
+                    YyConfig extConfig = rc.Raw.GameMaker.Yy;
+                    emitters["injectors"] = new CppInjectorsEmitter(injectorsCfg.ToSettings(extConfig), rc.Raw.Runtime);
+                }
+
+
             }
 
             // Android

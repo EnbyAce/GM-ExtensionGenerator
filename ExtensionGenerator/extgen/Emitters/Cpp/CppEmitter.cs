@@ -56,6 +56,7 @@ namespace extgen.Emitters.Cpp
         {
             CppCommonEmitter<CppWriter> common = new(ctx, typeMap, enums);
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.PragmaOnce();
 
             var ext = ctx.ExtName;
@@ -74,6 +75,7 @@ namespace extgen.Emitters.Cpp
         
         private void EmitInternalExports(CppEmitterContext ctx, IrCompilation c, CppWriter w)
         {
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.PragmaOnce();
             w.Include("core/GMExtUtils.h", false).Line();
 
@@ -114,6 +116,7 @@ namespace extgen.Emitters.Cpp
             CppCommonEmitter<CppWriter> common = new(ctx, typeMap, enums);
 
             // Local includes
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Include($"{ctx.ExtName}Internal_native.h", false)
             .Include($"{ctx.ExtName}Internal_exports.h", false)
             .Line()

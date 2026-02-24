@@ -1,6 +1,6 @@
 ﻿using extgen.Models.Config.Build;
 using extgen.Models.Config.Extras;
-using extgen.Models.Config.Gml;
+using extgen.Models.Config.GameMaker;
 using extgen.Models.Config.Targets;
 using System.Text.Json.Serialization;
 
@@ -20,7 +20,7 @@ namespace extgen.Models.Config
         [JsonPropertyName("profile")]
         public BuildProfile Profile { get; set; } = BuildProfile.Full;
 
-        [JsonPropertyName("gml")] public GmlConfig Gml { get; set; } = new GmlConfig();
+        [JsonPropertyName("gamemaker")] public GameMakerConfig GameMaker { get; set; } = new GameMakerConfig();
 
         [JsonPropertyName("targets")]
         public TargetsConfig Targets { get; set; } = new();

@@ -58,6 +58,7 @@ namespace extgen.Emitters.Android.Kotlin
             string pkg = ctx.Runtime.BasePackage;
             string wire = ctx.Runtime.WireClass;
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package(pkg);
             w.Import($"{pkg}.{wire}.GMFunction");
             w.Import($"{pkg}.{wire}.GMValue");

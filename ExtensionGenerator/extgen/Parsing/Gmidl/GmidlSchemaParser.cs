@@ -196,10 +196,14 @@ namespace extgen.Parsing.Gmidl
 
             var hidden = func.Attributes.Enabled("hidden");
 
+            var start_fn = func.Attributes.Enabled("start_fn");
+            var finish_fn = func.Attributes.Enabled("finish_fn");
+            var modifier = start_fn ? IrFunctionModifier.Start : (finish_fn ? IrFunctionModifier.Finish : IrFunctionModifier.None);
+
             return new IrFunction(
                 func.Name,
                 ParseType(func.Data.ReturnType, func.Attributes),
-                [.. func.Data.NamedArgs.Select(ParseParam)], selfParam, hidden);
+                [.. func.Data.NamedArgs.Select(ParseParam)], selfParam, hidden, modifier);
         }
 
         private IrParameter ParseParam(GMIDLNode<GMIDLFunctionArg> param)

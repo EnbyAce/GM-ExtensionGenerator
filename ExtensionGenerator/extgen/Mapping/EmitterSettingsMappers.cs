@@ -1,12 +1,12 @@
 ﻿using extgen.Emitters.AppleMobile;
 using extgen.Emitters.Cmake;
+using extgen.Emitters.CppInjectors;
 using extgen.Emitters.Doc;
 using extgen.Emitters.Gml;
 using extgen.Emitters.Yy;
 using extgen.Models.Config.Build;
 using extgen.Models.Config.Extras;
-using extgen.Models.Config.Gml;
-using extgen.Models.Config.Targets;
+using extgen.Models.Config.GameMaker;
 using extgen.Models.Config.Targets.Mobile;
 using extgen.Options.Android;
 
@@ -70,24 +70,41 @@ namespace extgen.Mappers
             };
 
         // ----------------------------
-        // GML + YY (driven by GmlConfig)
+        // GameMaker
         // ----------------------------
-        public static GmlEmitterSettings ToGmlSettings(this GmlConfig cfg)
+        public static GmlEmitterSettings ToSettings(this WrapperConfig cfg)
             => new()
             {
                 OutputFile = cfg.OutputFile,
-                RuntimeFile = cfg.RuntimeFile,
-                EmitRuntime = cfg.EmitRuntime
+                Mode = GmlEmitterMode.Wrapper
             };
 
-        public static YyEmitterSettings ToYySettings(this GmlConfig cfg, bool androidEnabled, bool iosEnabled, bool tvosEnabled)
+        public static GmlEmitterSettings ToSettings(this RuntimeConfig cfg)
             => new()
             {
-                OutputFile = cfg.ExtensionFile,
+                OutputFile = cfg.OutputFile,
+                Mode = GmlEmitterMode.Runtime
+            };
+
+        public static YyEmitterSettings ToSettings(this YyConfig cfg, bool androidEnabled, bool iosEnabled, bool tvosEnabled)
+            => new()
+            {
+                OutputFile = cfg.OutputFile,
+                Mode = cfg.Mode == YyMode.Patch ? YyEmitterMode.Patch : YyEmitterMode.Plain,
+                ExtensionName = cfg.ExtensionName,
+                ExtensionFileName = cfg.ExtensionFileName,
                 PatchFrameworks = cfg.PatchFrameworks,
                 AndroidEnabled = androidEnabled,
                 IosEnabled = iosEnabled,
                 TvosEnabled = tvosEnabled
             };
+
+        public static CppInjectorsEmitterSettings ToSettings(this InjectorsConfig cfg, YyConfig yyConfig)
+        => new()
+        {
+            OutputFolder = cfg.OutputFolder,
+            ExtensionName = yyConfig.ExtensionName,
+            ExtensionFileName = yyConfig.ExtensionFileName
+        };
     }
 }

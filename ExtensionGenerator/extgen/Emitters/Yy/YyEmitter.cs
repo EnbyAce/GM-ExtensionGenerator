@@ -18,7 +18,15 @@ namespace extgen.Emitters.Yy
 
             var path = Path.Combine(layout.OutputDir, $"{string.Format(layout.OutputFile, ctx.ExtName)}.yy");
 
-            PatchYyFile(comp, ctx, path);
+            switch (settings.Mode) 
+            {
+                case YyEmitterMode.Patch:
+                    PatchYyFile(comp, ctx, path);
+                    break;
+                case YyEmitterMode.Plain:
+                    WritePlainYyDefinitions(comp, ctx, path);
+                    break;
+            }
         }
 
         private static void PatchYyFile(IrCompilation comp, YyEmitterContext ctx, string yyPath)
@@ -40,9 +48,10 @@ namespace extgen.Emitters.Yy
                 throw new InvalidDataException("YY root was not an object. Invalid extension path provided.");
 
             var extname = root["name"]?.GetValue<string>();
-            if (extname is null || string.Compare(extname, comp.Name) != 0) 
+            var expectedExtensionName = ctx.Settings.ExtensionFileName ?? comp.Name;
+            if (extname is null || string.Compare(extname, expectedExtensionName) != 0) 
             {
-                throw new InvalidDataException($"YY extension name should be set to - '{comp.Name}'");
+                throw new InvalidDataException($"YY extension name doesn't match settings - '{expectedExtensionName}'");
             }
 
             if (ctx.Settings.AndroidEnabled)
@@ -58,9 +67,13 @@ namespace extgen.Emitters.Yy
 
 
             // Find the file entry matching "{compilation.Name}.ext"
-            var expectedFilename = $"{comp.Name}.ext";
+            var expectedFilename = ctx.Settings.ExtensionFileName ?? $"{comp.Name}.ext";
             JsonObject? extFileObj = FindExtensionFileObject(filesArray, expectedFilename) ?? 
-                throw new InvalidDataException($"YY extension should have a pre-created generic file - '{comp.Name}'");
+                throw new InvalidDataException($"YY extension should have a pre-created generic file - '{expectedFilename}'");
+
+            var allFunctions = comp.GetAllFunctions(IrFunctionUtil.PatchStructMethod);
+            extFileObj["final"] = allFunctions.Where(f => f.Modifier == IrFunctionModifier.Finish).FirstOrDefault()?.Name ?? "";
+            extFileObj["init"] = allFunctions.Where(f => f.Modifier == IrFunctionModifier.Start).FirstOrDefault()?.Name ?? "";
 
             PatchYyFunctions(comp, ctx, extFileObj);
 
@@ -91,30 +104,49 @@ namespace extgen.Emitters.Yy
                 EnsureThirdPartyXcframeworkEntry(root, "tvosThirdPartyFrameworkEntries", ctx.ExtName);
         }
 
+        private static void WritePlainYyDefinitions(IrCompilation comp, YyEmitterContext ctx, string yyPath) 
+        {
+            var writeOptions = new JsonSerializerOptions
+            {
+                WriteIndented = false
+            };
+
+            var output = string.Join($",{Environment.NewLine}", BuildFunctionJsonObjectList(comp, ctx).Select(fo => fo.ToJsonString(writeOptions)));
+
+            File.WriteAllText(yyPath, output, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
+
         private static void PatchYyFunctions(IrCompilation comp, YyEmitterContext ctx, JsonObject extFileObj)
         {
             // Build the new functions list (IrFunction -> YyExtFunction -> JsonObject)
+            var newFunctions = new JsonArray();
+            foreach (var func in BuildFunctionJsonObjectList(comp, ctx))
+            {
+                newFunctions.Add(func);
+            }
+            // Replace only the "functions" array
+            extFileObj["functions"] = newFunctions;
+        }
+
+        private static IEnumerable<JsonObject> BuildFunctionJsonObjectList(IrCompilation comp, YyEmitterContext ctx)
+        {
+            var allFunctions = comp.GetAllFunctions(IrFunctionUtil.PatchStructMethod);
             var usesFunctions = comp.HasFunctionType();
             var usesBuffer = comp.HasBufferType();
-
-            var allFunctions = comp.GetAllFunctions(IrFunctionUtil.PatchStructMethod);
-
-            var newFunctions = new JsonArray();
 
             foreach (var fn in allFunctions)
             {
                 var yyFn = YyExtFunction.FromIr(ctx, fn);
-                newFunctions.Add(yyFn.ToJsonObject());
+                yield return yyFn.ToJsonObject();
             }
 
             if (usesFunctions)
-                newFunctions.Add(YyExtFunction.MakeInvocationHandler(ctx, comp.Name).ToJsonObject());
+                yield return YyExtFunction.MakeInvocationHandler(ctx, comp.Name).ToJsonObject();
 
             if (usesBuffer)
-                newFunctions.Add(YyExtFunction.MakeQueueBuffer(ctx, comp.Name).ToJsonObject());
+                yield return YyExtFunction.MakeQueueBuffer(ctx, comp.Name).ToJsonObject();
 
-            // Replace only the "functions" array
-            extFileObj["functions"] = newFunctions;
+            yield break;
         }
 
         // Helpers

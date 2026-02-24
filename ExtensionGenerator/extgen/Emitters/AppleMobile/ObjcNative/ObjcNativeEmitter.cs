@@ -60,6 +60,7 @@ namespace extgen.Emitters.AppleMobile.ObjcNative
         {
             var ext = ctx.ExtName;
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Import("Foundation/Foundation.h", true)
              .Line();
 
@@ -97,6 +98,7 @@ namespace extgen.Emitters.AppleMobile.ObjcNative
             var ext = ctx.ExtName;
             var platform = ctx.Settings.Platform;
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Import($"{ext}Internal_{platform}.h")
              .Import($"native/{ext}Internal_exports.h")
              .Import("objc/runtime.h", true)

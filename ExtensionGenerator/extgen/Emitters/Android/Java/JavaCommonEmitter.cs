@@ -49,6 +49,7 @@ namespace extgen.Emitters.Android.Java
             string pkg = ctx.Runtime.BasePackage;
             string u = JavaWireHelpers.ScalarForEnum(e.Underlying);
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package($"{pkg}.enums").Line();
 
             // Build JavaEnumMembers with the underlying numeric literal as ctor argument
@@ -92,6 +93,7 @@ namespace extgen.Emitters.Android.Java
         {
             string pkg = ctx.Runtime.BasePackage;
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package($"{pkg}.records").Line();
 
             bool needsOptional = s.Fields.Any(f => IrType.IsNullable(f.Type));
@@ -130,6 +132,7 @@ namespace extgen.Emitters.Android.Java
             string pkg = ctx.Runtime.BasePackage;
             string wire = ctx.Runtime.WireClass;
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package($"{pkg}.codecs").Line();
 
             bool needsOptional = s.Fields.Any(f => IrType.IsNullable(f.Type));
@@ -188,6 +191,7 @@ namespace extgen.Emitters.Android.Java
             bool needsEnum = c.Enums.Any();
             bool needsRecords = c.Structs.Any();
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package(pkg)
                 .Import($"{pkg}.{wire}.GMFunction")
                 .Import($"{pkg}.{wire}.GMValue");
@@ -221,6 +225,7 @@ namespace extgen.Emitters.Android.Java
             string wire = ctx.Runtime.WireClass;  // e.g. GMExtWire
             string cls = $"{ext}Internal";
 
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
             w.Package(pkg).Line()
              .Import("java.nio.ByteBuffer")
              .Import("java.util.*")

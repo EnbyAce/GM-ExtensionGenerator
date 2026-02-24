@@ -1,9 +1,17 @@
 ﻿
 namespace extgen.Emitters.Yy
 {
+    public enum YyEmitterMode { Plain, Patch };
+
     public sealed class YyEmitterSettings
     {
         public required string OutputFile { get; set; }
+
+        public YyEmitterMode Mode { get; set; }
+
+        public required string? ExtensionName { get; set; }
+
+        public required string? ExtensionFileName { get; set; }
 
         public bool PatchFrameworks { get; set; }
 

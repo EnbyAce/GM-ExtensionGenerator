@@ -27,14 +27,16 @@ namespace extgen.Emitters.Gml
             var ctx = new GmlEmitterContext(comp.Name, settings);
             var layout = new GmlLayout(dir, settings);
 
-            var enums = new IrTypeEnumResolver(comp.Enums);
-
-            FileEmitHelpers.WriteGml(layout.OutputFolder, $"{layout.OutputFile}.gml", w => EmitAll(ctx, comp, enums, w));
-
-            if (settings.EmitRuntime) 
+            switch (settings.Mode) 
             {
-                var output = Path.Combine(layout.OutputFolder, $"{layout.OutputFile}.gml");
-                ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Gml.ExtensionCore_api.gml", output);
+                case GmlEmitterMode.Wrapper:
+                    var enums = new IrTypeEnumResolver(comp.Enums);
+                    FileEmitHelpers.WriteGml(layout.OutputFolder, $"{layout.OutputFile}.gml", w => EmitAll(ctx, comp, enums, w));
+                    break;
+                case GmlEmitterMode.Runtime:
+                    var output = Path.Combine(layout.OutputFolder, $"{layout.OutputFile}.gml");
+                    ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Gml.ExtensionCore_api.gml", output);
+                    break;
             }
         }
 
@@ -44,7 +46,7 @@ namespace extgen.Emitters.Gml
 
         private static void EmitAll(GmlEmitterContext ctx, IrCompilation c, IIrTypeEnumResolver enums, GmlWriter w)
         {
-            w.Comment("Auto-generated – do not edit");
+            w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line();
 
             EmitMacros(c.Constants, w);
             EmitEnums(c.Enums, w);
