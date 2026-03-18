@@ -135,6 +135,7 @@ namespace extgen.Emitters.Android.Jni
             w.Package(ctx.Runtime.BridgePackage);
             w.Import("java.lang.String");
             w.Import("java.nio.ByteBuffer");
+            w.Import("${YYAndroidPackageName}.GMExtUtils");
             w.Line();
 
             w.Class($"{ctx.ExtName}Bridge", body =>
@@ -154,6 +155,13 @@ namespace extgen.Emitters.Android.Jni
 
                 var usesFunctions = c.HasFunctionType();
                 var usesBuffers = c.HasBufferType();
+
+                body.Function("__EXT_JAVA__GetExtensionOption", parameters: [
+                        new Param("String", "extName"),
+                        new Param("String", "optName")
+                    ], m => m.Return(expr => expr.Call("GMExtUtils.GetExtensionOption", "extName", "optName")),
+                    "String", ["public", "static"]);
+                body.Line();
 
                 if (usesFunctions)
                 {
@@ -180,6 +188,7 @@ namespace extgen.Emitters.Android.Jni
                         modifiers: ["public", "static", "native"]
                     );
                 }
+
             }, ["public", "final"]);
         }
 
@@ -272,6 +281,9 @@ namespace extgen.Emitters.Android.Jni
             .Lines($$"""
                 // Per-library globals
                 static JavaVM* g_vm = nullptr;
+                // Cached Java callback targets
+                static jclass g_bridgeClass = nullptr;
+                static jmethodID g_mid_GetExtensionOption = nullptr;
 
                 extern "C" jint JNI_OnLoad(JavaVM* vm, void*) { g_vm = vm; return JNI_VERSION_1_6; }
 
@@ -279,6 +291,27 @@ namespace extgen.Emitters.Android.Jni
                     jclass iae = env->FindClass("java/lang/IllegalArgumentException");
                     if (iae) env->ThrowNew(iae, msg);
                 }
+
+                // RAII pin/unpin for JNIEnv
+                struct ScopedEnv {
+                    JNIEnv* env = nullptr;
+                    bool detach = false;
+
+                    ScopedEnv() {
+                        if (!g_vm) return;
+                        jint rc = g_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+                        if (rc == JNI_OK) return;
+                        if (rc == JNI_EDETACHED && g_vm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+                            detach = true;
+                        } else {
+                            env = nullptr;
+                        }
+                    }
+
+                    ~ScopedEnv() {
+                        if (detach) g_vm->DetachCurrentThread();
+                    }
+                };
 
                 // RAII pin/unpin for jstring UTF-8 chars
                 struct UtfChars {
@@ -289,6 +322,74 @@ namespace extgen.Emitters.Android.Jni
                 };
                 """)
             .Line();
+
+            EmitNativeJavaCallbacks(ctx, w);
+            EmitNativeRunnerInit(ctx, w);
+        }
+
+
+        private static void EmitNativeJavaCallbacks(JniEmitterContext ctx, CppWriter w)
+        {
+            w.Lines("""
+                static const char* __JNI_JAVA__GetExtensionOption(const char* extName, const char* optName)
+                {
+                    thread_local std::string tls_result;
+                    tls_result.clear();
+
+                    ScopedEnv scoped;
+                    if (!scoped || !g_bridgeClass || !g_mid_GetExtensionOption) {
+                        return nullptr;
+                    }
+
+                    JNIEnv* env = scoped.env;
+
+                    jstring jExtName = extName ? env->NewStringUTF(extName) : nullptr;
+                    jstring jOptName = optName ? env->NewStringUTF(optName) : nullptr;
+
+                    jstring jRet = static_cast<jstring>(
+                        env->CallStaticObjectMethod(g_bridgeClass, g_mid_GetExtensionOption, jExtName, jOptName)
+                    );
+
+                    if (jExtName) env->DeleteLocalRef(jExtName);
+                    if (jOptName) env->DeleteLocalRef(jOptName);
+
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionDescribe();
+                        env->ExceptionClear();
+                        if (jRet) env->DeleteLocalRef(jRet);
+                        return nullptr;
+                    }
+
+                    if (!jRet) {
+                        return nullptr;
+                    }
+
+                    const char* chars = env->GetStringUTFChars(jRet, nullptr);
+                    if (!chars) {
+                        env->DeleteLocalRef(jRet);
+                        return nullptr;
+                    }
+
+                    tls_result.assign(chars);
+
+                    env->ReleaseStringUTFChars(jRet, chars);
+                    env->DeleteLocalRef(jRet);
+
+                    return tls_result.c_str();
+                }
+                """);
+        }
+
+        private static void EmitNativeRunnerInit(JniEmitterContext ctx, CppWriter w)
+        {
+            w.Lines("""
+                static void __JNI_InitExtUtils()
+                {
+                    gm::details::GMRTRunnerInterface runner{};
+                    runner.ExtOptGetString = __JNI_JAVA__GetExtensionOption;
+                    ExtUtils.Init(runner);
+                }
+                """);
         }
 
         private static void EmitNativeWrapper(CppWriter w, string bridgeClass, JniFunctionSpec s, string cWrap, string jniSig)
@@ -375,6 +476,31 @@ namespace extgen.Emitters.Android.Jni
                       new Param("jclass",  "bridgeClass") ],
                     body =>
                     {
+                        body.Lines("""
+                            if (!g_bridgeClass) {
+                                g_bridgeClass = static_cast<jclass>(env->NewGlobalRef(bridgeClass));
+                            }
+
+                            if (!g_mid_GetExtensionOption) {
+                                g_mid_GetExtensionOption = env->GetStaticMethodID(
+                                    g_bridgeClass,
+                                    "__EXT_JAVA__GetExtensionOption",
+                                    "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"
+                                );
+                                if (!g_mid_GetExtensionOption) {
+                                    throwIAE(env, "Failed to bind __EXT_JAVA__GetExtensionOption");
+                                    return;
+                                }
+                            }
+
+                            static bool g_extUtilsInitialized = false;
+                            if (!g_extUtilsInitialized) {
+                                __JNI_InitExtUtils();
+                                g_extUtilsInitialized = true;
+                            }
+
+                            """);
+
                         body.Comment("Registers all the native methods")
                             .Assign("methods[]", b => b.Block(block =>
                             {

@@ -62,6 +62,7 @@
     <EmbeddedResource Include="Resources\Gml\ExtensionCore_api.gml">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Java\GMExtUtils.java" />
     <EmbeddedResource Include="Resources\Java\GMExtWire.java">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
