@@ -90,6 +90,7 @@ namespace extgen.Emitters.AppleMobile.Objc
 
             w.Comment("##### extgen :: Auto-generated file do not edit!! #####").Line()
                 .Import("objc/runtime.h", true)
+                .Import($"core/GMExtUtils.h")
                 .Import($"{ext}Internal_{platform}.h")
                 .Line();
 

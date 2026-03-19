@@ -180,6 +180,12 @@ elseif(EXTGEN_IS_IOS)
   enable_language(OBJCXX)
   if(EXTGEN_ENABLE_SWIFT)
     enable_language(Swift)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+      XCODE_ATTRIBUTE_DEFINES_MODULE YES
+      XCODE_ATTRIBUTE_SWIFT_INSTALL_OBJC_HEADER YES
+      XCODE_ATTRIBUTE_SWIFT_OBJC_INTERFACE_HEADER_NAME "${PROJECT_NAME}-Swift.h"
+      XCODE_ATTRIBUTE_SWIFT_OBJC_INTEROP_MODE objcxx
+    )
   endif()
 
   if(EXT_APPLE_NATIVE_FRAMEWORK)
@@ -199,6 +205,12 @@ elseif(EXTGEN_IS_TVOS)
   enable_language(OBJCXX)
   if(EXTGEN_ENABLE_SWIFT)
     enable_language(Swift)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+      XCODE_ATTRIBUTE_DEFINES_MODULE YES
+      XCODE_ATTRIBUTE_SWIFT_INSTALL_OBJC_HEADER YES
+      XCODE_ATTRIBUTE_SWIFT_OBJC_INTERFACE_HEADER_NAME "${PROJECT_NAME}-Swift.h"
+      XCODE_ATTRIBUTE_SWIFT_OBJC_INTEROP_MODE objcxx
+    )
   endif()
 
   if(EXT_APPLE_NATIVE_FRAMEWORK)
@@ -233,10 +245,16 @@ if(EXT_STRICT_WARNINGS)
     target_compile_options(${PROJECT_NAME} PRIVATE /W4 /permissive-)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS WIN32_LEAN_AND_MEAN NOMINMAX)
   else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(${PROJECT_NAME} PRIVATE
+      $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic>
+      $<$<COMPILE_LANGUAGE:OBJCXX>:-Wall -Wextra -Wpedantic>
+    )
+
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unknown-pragmas)
-      target_compile_options(${PROJECT_NAME} PRIVATE -Wno-gnu-zero-variadic-macro-arguments)
+      target_compile_options(${PROJECT_NAME} PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-pragmas -Wno-gnu-zero-variadic-macro-arguments>
+        $<$<COMPILE_LANGUAGE:OBJCXX>:-Wno-unknown-pragmas -Wno-gnu-zero-variadic-macro-arguments>
+      )
     endif()
   endif()
 endif()
