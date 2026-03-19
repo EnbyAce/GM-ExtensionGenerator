@@ -7,9 +7,6 @@ using extgen.Models.Config;
 using extgen.Models.Utils;
 using extgen.TypeSystem.Cpp;
 using extgen.Utils;
-using gmutils;
-using System.Linq;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace extgen.Emitters.Cpp
 {

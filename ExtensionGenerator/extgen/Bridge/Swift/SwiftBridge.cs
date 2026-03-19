@@ -2,6 +2,7 @@
 using codegencore.Writers.Lang;
 using extgen.Bridge.Objc;
 using extgen.Emitters.AppleMobile.Objc;
+using extgen.Emitters.Cpp;
 using extgen.Emitters.Utils;
 using extgen.Models;
 using extgen.TypeSystem;
@@ -20,6 +21,10 @@ namespace extgen.Bridge.Swift
     {
         public void EmitWire(ObjcEmitterContext ctx, ObjcLayout layout)
         {
+            // We will need the utils (ONLY)
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cpp.GMExtUtils.cpp", Path.Combine(layout.CoreDir, "GMExtUtils.cpp"));
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Cpp.GMExtUtils.h", Path.Combine(layout.CoreDir, "GMExtUtils.h"));
+
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtWire.swift", Path.Combine(layout.CodeGenDir, "GMExtWire.swift"));
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtils.swift", Path.Combine(layout.CodeGenDir, "GMExtUtils.swift"));
 
