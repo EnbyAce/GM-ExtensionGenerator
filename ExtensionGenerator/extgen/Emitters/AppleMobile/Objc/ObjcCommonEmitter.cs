@@ -23,7 +23,7 @@ namespace extgen.Emitters.AppleMobile.Objc
         {
             var platform = ctx.Settings.Platform;
 
-            bridge.EmitWire(layout);
+            bridge.EmitWire(ctx, layout);
 
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{c.Name}Internal_{platform}.h", w => EmitInternalHeader(ctx, c, w));
             FileEmitHelpers.WriteObjc(layout.CodeGenDir, $"{c.Name}Internal_{platform}.mm", w => EmitInternalImpl(ctx, c, w));

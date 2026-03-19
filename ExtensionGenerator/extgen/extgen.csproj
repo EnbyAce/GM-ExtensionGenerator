@@ -26,6 +26,7 @@
     <None Remove="Resources\Swift\GMExtUtils.swift" />
     <None Remove="Resources\Swift\GMExtUtilsBridge.h" />
     <None Remove="Resources\Swift\GMExtWire.swift" />
+    <None Remove="Resources\Swift\InternalBridgingHeader.h" />
   </ItemGroup>
 
   <ItemGroup>
@@ -73,6 +74,7 @@
     <EmbeddedResource Include="Resources\Swift\GMExtWire.swift">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Swift\InternalBridgingHeader.h" />
   </ItemGroup>
 
   <ItemGroup>

@@ -17,7 +17,7 @@ namespace extgen.Bridge.Objc
     /// </summary>
     internal class ObjcBridge(IIrTypeEnumResolver enums) : IAppleBridge
     {
-        public void EmitWire(ObjcLayout layout)
+        public void EmitWire(ObjcEmitterContext ctx, ObjcLayout layout)
         {
             CppEmitter.EmitWire(layout.CoreDir);
         }

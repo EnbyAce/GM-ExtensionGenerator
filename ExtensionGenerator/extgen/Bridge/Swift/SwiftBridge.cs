@@ -18,13 +18,19 @@ namespace extgen.Bridge.Swift
     /// </summary>
     internal sealed class SwiftBridge : IAppleBridge
     {
-        public void EmitWire(ObjcLayout layout)
+        public void EmitWire(ObjcEmitterContext ctx, ObjcLayout layout)
         {
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtWire.swift", Path.Combine(layout.CodeGenDir, "GMExtWire.swift"));
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtils.swift", Path.Combine(layout.CodeGenDir, "GMExtUtils.swift"));
 
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtilsBridge.h", Path.Combine(layout.CodeGenDir, "GMExtUtilsBridge.h"));
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtilsBridge.mm", Path.Combine(layout.CodeGenDir, "GMExtUtilsBridge.mm"));
+
+            ResourceWriter.WriteTemplatedTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.InternalBridgingHeader.h", Path.Combine(layout.CodeGenDir, $"{ctx.ExtName}-Bridging-Header.h"), new Dictionary<string, string>
+            {
+                // Frameworks
+                ["EXTGEN_APPLE_MOBILE_PLATFORM"] = ctx.Settings.Platform
+            });
         }
 
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
