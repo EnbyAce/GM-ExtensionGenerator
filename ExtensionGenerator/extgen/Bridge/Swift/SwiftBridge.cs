@@ -21,6 +21,10 @@ namespace extgen.Bridge.Swift
         public void EmitWire(ObjcLayout layout)
         {
             ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtWire.swift", Path.Combine(layout.CodeGenDir, "GMExtWire.swift"));
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtils.swift", Path.Combine(layout.CodeGenDir, "GMExtUtils.swift"));
+
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtilsBridge.h", Path.Combine(layout.CodeGenDir, "GMExtUtilsBridge.h"));
+            ResourceWriter.WriteTextResource(typeof(Program).Assembly, "extgen.Resources.Swift.GMExtUtilsBridge.mm", Path.Combine(layout.CodeGenDir, "GMExtUtilsBridge.mm"));
         }
 
         public void EmitIvars(ObjcEmitterContext ctx, IrCompilation c, ObjcWriter w)
