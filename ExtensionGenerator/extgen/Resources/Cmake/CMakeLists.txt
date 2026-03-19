@@ -92,9 +92,10 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # ============================================================
 # Includes & source discovery (code_gen)
 # ============================================================
-set(SRC_CORE
-  ${CMAKE_CURRENT_SOURCE_DIR}/code_gen/core/GMExtUtils.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/code_gen/core/GMExtWire.cpp
+file(GLOB SRC_CORE CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/code_gen/core/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/code_gen/core/*.mm
+  ${CMAKE_CURRENT_SOURCE_DIR}/code_gen/core/*.swift
 )
 target_sources(${PROJECT_NAME} PRIVATE ${SRC_CORE})
 
