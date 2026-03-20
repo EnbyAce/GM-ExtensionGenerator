@@ -43,6 +43,9 @@ namespace extgen.Emitters.AppleMobile.Swift
             common.EmitInternal(c, layout);
             common.EmitObjcUserShell(c, layout);
 
+            // Swift dummy empty file (this will enable swift mode in GameMaker project)
+            FileEmitHelpers.WriteSwift(layout.OutputSource, "dummy.swift", w => { });
+
             // Swift base (always regenerated)
             FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}Artifacts.swift", w => EmitArtifacts(w, c, enums));
             FileEmitHelpers.WriteSwift(layout.CodeGenDir, $"{ctx.ExtName}InternalSwift.swift", w => EmitInternalSwift(ctx, c, w, enums));

@@ -7,6 +7,7 @@ namespace extgen.Emitters.AppleMobile
         public string SourceFolder { get; set; } = "./tvos";
         public string SourceFilename { get; set; } = "{0}_tvos";
         public string OutputFolder { get; set; } = "../tvOSSourceFromMac";
+        public string OutputSourceFolder { get; set; } = "../tvOSSource";
 
         public string Platform => "tvos";
     }

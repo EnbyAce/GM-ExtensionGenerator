@@ -1,5 +1,4 @@
-﻿using extgen.Emitters.AppleMobile;
-
+﻿
 namespace extgen.Emitters.AppleMobile.Objc
 {
     internal sealed class ObjcLayout
@@ -7,12 +6,14 @@ namespace extgen.Emitters.AppleMobile.Objc
         public string CoreDir { get; }
         public string CodeGenDir { get; }
         public string SourceDir { get; }
+        public string OutputSource { get; }
 
-        public ObjcLayout(string root, IAppleMobileEmitterSettings options)
+        public ObjcLayout(string root, IAppleMobileEmitterSettings settings)
         {
             CoreDir = Path.GetFullPath(Path.Combine($"./code_gen/core"), root);
-            CodeGenDir = Path.GetFullPath(Path.Combine($"./code_gen/{options.Platform}"), root);
-            SourceDir = Path.GetFullPath(Path.Combine($"./src/{options.SourceFolder}"), root);
+            CodeGenDir = Path.GetFullPath(Path.Combine($"./code_gen/{settings.Platform}"), root);
+            SourceDir = Path.GetFullPath(Path.Combine($"./src/{settings.SourceFolder}"), root);
+            OutputSource = Path.GetFullPath(settings.OutputSourceFolder, root);
 
             if (Directory.Exists(CodeGenDir)) Directory.Delete(CodeGenDir, true);
 

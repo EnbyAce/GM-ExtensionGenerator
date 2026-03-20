@@ -13,5 +13,7 @@ namespace extgen.Models.Config.Targets.Mobile
         public string SourceFilename { get; set; } = "{0}_tvos";
         [JsonPropertyName("outputFolder")]
         public override string Output { get; set; } = "../tvOSSourceFromMac";
+        [JsonPropertyName("outputSourceFolder")]
+        public string OutputSource { get; set; } = "../tvOSSource";
     }
 }

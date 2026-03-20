@@ -48,7 +48,8 @@ namespace extgen.Mappers
             {
                 OutputFolder = cfg.Output,
                 SourceFolder = cfg.SourceFolder,
-                SourceFilename = cfg.SourceFilename
+                SourceFilename = cfg.SourceFilename,
+                OutputSourceFolder = cfg.OutputSource
             };
 
         public static TvosEmitterSettings ToSettings(this TvosTargetConfig cfg)
@@ -56,7 +57,8 @@ namespace extgen.Mappers
             {
                 OutputFolder = cfg.Output,
                 SourceFolder = cfg.SourceFolder,
-                SourceFilename = cfg.SourceFilename
+                SourceFilename = cfg.SourceFilename,
+                OutputSourceFolder = cfg.OutputSource
             };
 
         // ----------------------------

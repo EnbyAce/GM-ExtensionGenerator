@@ -13,5 +13,7 @@ namespace extgen.Models.Config.Targets.Mobile
         public string SourceFilename { get; set; } = "{0}_ios";
         [JsonPropertyName("outputFolder")]
         public override string Output { get; set; } = "../iOSSourceFromMac";
+        [JsonPropertyName("outputSourceFolder")]
+        public string OutputSource { get; set; } = "../iOSSource";
     }
 }

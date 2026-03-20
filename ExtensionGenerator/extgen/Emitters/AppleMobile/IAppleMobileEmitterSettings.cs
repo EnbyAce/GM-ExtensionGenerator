@@ -8,5 +8,7 @@ namespace extgen.Emitters.AppleMobile
         public string SourceFolder { get; set; }
 
         public string SourceFilename { get; set; }
+
+        public string OutputSourceFolder { get; set; }
     }
 }
