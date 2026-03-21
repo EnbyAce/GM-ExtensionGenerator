@@ -103,7 +103,7 @@ namespace extgen.Emitters.AppleMobile.Swift
         {
             foreach (var s in structs)
             {
-                w.Struct(s.Name, modifiers: ["public"], inher: null, body: body =>
+                w.Struct(s.Name, modifiers: ["public"], inher: ["ITypedStruct"], body: body =>
                 {
                     foreach (var f in s.Fields)
                     {
