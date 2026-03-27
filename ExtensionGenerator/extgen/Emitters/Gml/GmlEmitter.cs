@@ -1,4 +1,4 @@
-﻿using codegencore.Models;
+using codegencore.Models;
 using codegencore.Writers.JSDoc;
 using codegencore.Writers.Lang;
 using extgen.Emitters.Doc;
@@ -422,7 +422,7 @@ namespace extgen.Emitters.Gml
             {
                 case BuiltinKind.String:
                     // write length + payload (you already do this)
-                    w.Call("buffer_write", buf, "buffer_u32", $"string_length({id})").Line(";");
+                    w.Call("buffer_write", buf, "buffer_u32", $"string_byte_length({id})").Line(";");
                     w.Call("buffer_write", buf, GmlBufCode(new IrType.Builtin(BuiltinKind.String)), id).Line(";");
                     return;
 
