@@ -74,7 +74,7 @@ namespace extgen.TypeSystem.Swift
                 BuiltinKind.AnyArray => "[GMValue]",
                 BuiltinKind.AnyMap => "[(String, GMValue)]",
 
-                // Preserve your previous rule: buffer cannot be returned/owned
+                // Buffers cannot be returned/owned (same constraint as C++)
                 BuiltinKind.Buffer => owned
                     ? throw new NotSupportedException("code emitter: buffer as return is not supported.")
                     : "GMBuffer",

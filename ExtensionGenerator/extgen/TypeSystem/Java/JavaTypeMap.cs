@@ -35,7 +35,6 @@ namespace extgen.TypeSystem.Java
 
                 IrType.Builtin b => MapBuiltin(b, owned),
 
-                // If you add more shapes later, you'll be forced to update here.
                 _ => "Object"
             };
         }
@@ -69,7 +68,7 @@ namespace extgen.TypeSystem.Java
 
                 BuiltinKind.String => MapString(owned),
 
-                // Your earlier mapping: Any is GMValue, and AnyArray/AnyMap map to generic containers
+                // Dynamic types: Any is GMValue, arrays/maps use generic containers
                 BuiltinKind.Any => "GMValue",
                 BuiltinKind.AnyArray => "java.util.List<GMValue>",
                 BuiltinKind.AnyMap => "java.util.Map<String, GMValue>",

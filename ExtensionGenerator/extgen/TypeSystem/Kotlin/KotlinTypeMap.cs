@@ -67,8 +67,8 @@ namespace extgen.TypeSystem.Kotlin
                 BuiltinKind.Int8 or BuiltinKind.UInt8 => "Byte",
                 BuiltinKind.Int16 or BuiltinKind.UInt16 => "Short",
 
-                // Kotlin has UInt/ULong but on JVM they’re inline classes; your old behavior used signed.
-                // Keep it pragmatic and stable:
+                // Kotlin has UInt/ULong but on JVM they’re inline classes; previous implementation used signed.
+                // Keeping signed types for stable JVM interop:
                 BuiltinKind.Int32 or BuiltinKind.UInt32 => "Int",
                 BuiltinKind.Int64 or BuiltinKind.UInt64 => "Long",
 
