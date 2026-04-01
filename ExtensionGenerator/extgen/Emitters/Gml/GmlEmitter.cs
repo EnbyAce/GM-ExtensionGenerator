@@ -150,7 +150,7 @@ namespace extgen.Emitters.Gml
         {
             w.JsDoc(builder =>
             {
-                builder.Returns(DocEmitter.JsDocType(new IrType.Named(NamedKind.Struct, s.Name)));
+                builder.Returns(JsDocType(new IrType.Named(NamedKind.Struct, s.Name)));
 
                 if (s.Hidden)
                     builder.Tag("ignore");
@@ -175,10 +175,10 @@ namespace extgen.Emitters.Gml
                     body.JsDoc(builder =>
                     {
                         foreach (var p in patchedFunc.Parameters)
-                            builder.Param(new ParamDoc(p.Name, DocEmitter.JsDocType(p.Type)));
+                            builder.Param(new ParamDoc(p.Name, JsDocType(p.Type)));
 
                         if (!patchedFunc.ReturnType.IsVoid())
-                            builder.Returns(DocEmitter.JsDocType(fn.ReturnType));
+                            builder.Returns(JsDocType(fn.ReturnType));
 
                         if (fn.Hidden)
                             builder.Tag("ignore");
@@ -280,10 +280,10 @@ namespace extgen.Emitters.Gml
             w.JsDoc(builder =>
             {
                 foreach (var p in fn.Parameters)
-                    builder.Param(new ParamDoc(p.Name, DocEmitter.JsDocType(p.Type)));
+                    builder.Param(new ParamDoc(p.Name, JsDocType(p.Type)));
 
                 if (!fn.ReturnType.IsVoid())
-                    builder.Returns(DocEmitter.JsDocType(fn.ReturnType));
+                    builder.Returns(JsDocType(fn.ReturnType));
 
                 if (fn.Hidden)
                     builder.Tag("ignore");
@@ -656,6 +656,13 @@ namespace extgen.Emitters.Gml
 
                 _ => throw new NotSupportedException($"GML buffer code: builtin {b.Kind} not supported.")
             };
+        }
+
+        private static string JsDocType(IrType t)
+        {
+            if (t is IrType.Builtin and { Kind: BuiltinKind.Buffer }) return "Id.Buffer";
+
+            return DocEmitter.JsDocType(t);
         }
     }
 }
