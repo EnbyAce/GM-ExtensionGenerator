@@ -333,7 +333,7 @@ namespace extgen.Emitters.Android.Jni
                     tls_result.clear();
 
                     ScopedEnv scoped;
-                    if (!scoped || !g_bridgeClass || !g_mid_GetExtensionOption) {
+                    if (!g_bridgeClass || !g_mid_GetExtensionOption) {
                         return nullptr;
                     }
 
@@ -383,7 +383,7 @@ namespace extgen.Emitters.Android.Jni
                 {
                     gm::details::GMRTRunnerInterface runner{};
                     runner.ExtOptGetString = __JNI_JAVA__GetExtensionOption;
-                    ExtUtils.Init(runner);
+                    gm::ExtUtils::Init(runner);
                 }
                 """);
         }
