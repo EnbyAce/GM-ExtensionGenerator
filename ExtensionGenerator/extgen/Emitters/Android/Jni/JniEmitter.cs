@@ -149,7 +149,7 @@ namespace extgen.Emitters.Android.Jni
                         new Param("String", "extName"),
                         new Param("String", "optName")
                     ], m => m.Return(expr => expr.Call("GMExtUtils.GetExtensionOption", "extName", "optName")),
-                    "String", ["public", "static"]);
+                    "String", modifiers: ["public", "static"]);
                 body.Line();
 
                 if (usesFunctions)
