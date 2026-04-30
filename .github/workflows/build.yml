@@ -32,8 +32,8 @@ jobs:
         run: |
           cd ExtensionGenerator
           dotnet restore
-          dotnet build -c ${{ github.event_name == 'workflow_dispatch' && 'Release' || 'Debug' }}
-          dotnet publish -c ${{ github.event_name == 'workflow_dispatch' && 'Release' || 'Debug' }} -r ${{ matrix.dotnet-target }} --self-contained true -o ./publish/${{ matrix.dotnet-target }}
+          dotnet build -c Release
+          dotnet publish -c Release -r ${{ matrix.dotnet-target }} --self-contained true -o ./publish/${{ matrix.dotnet-target }}
 
       - name: Upload the ExtensionGenerator-${{matrix.dotnet-target}} artifact
         uses: actions/upload-artifact@v7
