@@ -1,4 +1,4 @@
-name: Automated building
+name: Auto release
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
       - "/gamemaker.extension_core.yymps"
       - "/ExtensionGenerator/**"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -40,3 +43,17 @@ jobs:
         with:
           name: ExtensionGenerator-${{ matrix.dotnet-target }}
           path: ./ExtensionGenerator/publish/${{ matrix.dotnet-target }}/**
+
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          skip-decompress: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: nightly
+          prerelease: true
+          overwrite_files: true
+          files: ./ExtensionGenerator-*/ExtensionGenerator-*.zip
