@@ -1,0 +1,42 @@
+name: Automated building
+
+on:
+  push:
+    paths:
+      - "/gamemaker.extension_core.yymps"
+      - "/ExtensionGenerator/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner-os: ubuntu-latest
+            dotnet-target: linux-x64
+          - runner-os: windows-latest
+            dotnet-target: win-x64
+          - runner-os: macos-latest
+            dotnet-target: osx-arm64
+          - runner-os: macos-26-intel
+            dotnet-target: osx-x64
+    runs-on: ${{ matrix.runner-os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.x
+
+      - name: Build and publish for ${{ matrix.dotnet-target }}
+        run: |
+          cd ExtensionGenerator
+          dotnet restore
+          dotnet build -c ${{ github.event_name == 'workflow_dispatch' && 'Release' || 'Debug' }}
+          dotnet publish -c ${{ github.event_name == 'workflow_dispatch' && 'Release' || 'Debug' }} -r ${{ matrix.dotnet-target }} --self-contained true -o ./publish/${{ matrix.dotnet-target }}
+
+      - name: Upload the ExtensionGenerator-${{matrix.dotnet-target}} artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ExtensionGenerator-${{ matrix.dotnet-target }}
+          path: ./ExtensionGenerator/publish/${{ matrix.dotnet-target }}/**
